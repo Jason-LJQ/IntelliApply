@@ -1,3 +1,9 @@
+############################################
+# Author: Jason Liao
+# Date: 2024-12-22
+# Description: A simple script to search for job applications in an Excel file
+############################################
+
 import pandas as pd
 import re
 
@@ -6,15 +12,16 @@ def get_abbreviation(name):
     """Get the abbreviation of a string by taking first letters of each word"""
     if not isinstance(name, str):
         return ''
-    # Remove common company terms and special characters
-    common_terms = ['corporation', 'corp', 'inc', 'incorporated', 'limited', 'ltd', 'llc', 'cooperation']
-    cleaned_name = str(name).lower()
-    for term in common_terms:
-        cleaned_name = cleaned_name.replace(term, '')
     # Remove special characters, keep only letters and spaces
-    cleaned_name = re.sub(r'[^a-zA-Z\s]', '', cleaned_name)
-    # Get first letter of each word
-    return ''.join(word[0].upper() for word in cleaned_name.split() if word)
+    cleaned_name = re.sub(r'[^a-zA-Z\s]', '', str(name))
+    words = cleaned_name.strip().split()
+    abbr_parts = []
+    for w in words:
+        if w.isupper():
+            abbr_parts.append(w)  # Preserve the entire uppercase word
+        else:
+            abbr_parts.append(w[0].upper() if w else '')
+    return ''.join(abbr_parts)
 
 
 def normalize_company_name(name):
@@ -77,7 +84,7 @@ def print_results(results):
 
 def is_company_match(company1, company2):
     """
-    Compare if two company names match, considering only exact matches and abbreviations
+    Compare if two company names match, considering exact matches and abbreviations
     """
     if not isinstance(company1, str) or not isinstance(company2, str):
         return False
@@ -90,15 +97,40 @@ def is_company_match(company1, company2):
     if norm_company1 == norm_company2:
         return True
 
-    # Compare abbreviation with full name
+    # Get abbreviations
     abbr1 = get_abbreviation(company1)
     abbr2 = get_abbreviation(company2)
 
-    # Check if one name is an abbreviation of the other
-    if len(abbr1) > 1 and len(abbr2) > 1:
+    # Compare abbreviation with full name and vice versa
+    if len(abbr1) > 1:
         if abbr1 == abbr2:
             return True
-        if abbr1 == norm_company2 or abbr2 == norm_company1:
+        # Check if abbr1 matches the first letters of norm_company2's words
+        if abbr1 == get_abbreviation(norm_company2):
+            return True
+
+    if len(abbr2) > 1:
+        # Check if abbr2 matches the first letters of norm_company1's words
+        if abbr2 == get_abbreviation(norm_company1):
+            return True
+
+    # Additional comparison: check if abbreviation of one matches normalized other
+    abbr1 = get_abbreviation(norm_company1)
+    abbr2 = get_abbreviation(norm_company2)
+    
+    if abbr1 == norm_company2 or abbr2 == norm_company1:
+        return True
+
+    # Handle case where one is abbreviation and other is full name
+    words1 = norm_company1.split()
+    words2 = norm_company2.split()
+
+    if len(words1) >= 2 and len(words2) >= 2:
+        # Check if the initials of one match the other's abbreviation
+        initials1 = ''.join(word[0].upper() for word in words1)
+        initials2 = ''.join(word[0].upper() for word in words2)
+
+        if initials1 == abbr2 or initials2 == abbr1:
             return True
 
     return False
