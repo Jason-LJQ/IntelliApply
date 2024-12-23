@@ -31,6 +31,50 @@ def normalize_company_name(name):
     return re.sub(r'\s+', ' ', name_lower).strip()
 
 
+def format_location(location):
+    """Convert multi-line location to single line with semicolons"""
+    return '; '.join(str(location).strip().split('\n'))
+
+
+def print_results(results):
+    if not results:
+        print("\nNo matching records found!")
+        return
+
+    print(f"\nFound {len(results)} matching records:")
+
+    # Calculate maximum widths for each column
+    company_width = max(len(str(r['Company'])) for r in results)
+    company_width = max(company_width, len("Company"))
+
+    location_width = max(len(format_location(r['Location'])) for r in results)
+    location_width = max(location_width, len("Location"))
+
+    job_width = max(len(str(r['Job Title'])) for r in results)
+    job_width = max(job_width, len("Job Title"))
+
+    # Print header
+    print("\n{:<{width1}}  {:<{width2}}  {:<{width3}}".format(
+        "Company", "Location", "Job Title",
+        width1=company_width,
+        width2=location_width,
+        width3=job_width
+    ))
+    print("-" * (company_width + location_width + job_width + 4))
+
+    # Print results
+    for result in results:
+        formatted_location = format_location(result['Location'])
+        print("{:<{width1}}  {:<{width2}}  {:<{width3}}".format(
+            str(result['Company']),
+            formatted_location,
+            str(result['Job Title']),
+            width1=company_width,
+            width2=location_width,
+            width3=job_width
+        ))
+
+
 def is_company_match(company1, company2):
     """
     Compare if two company names match, considering only exact matches and abbreviations
@@ -116,13 +160,7 @@ def main():
         results = search_applications(excel_file, search_term)
 
         if results:
-            print(f"\nFound {len(results)} matching records:")
-            # Print header
-            print("\nCompany\tLocation\tJob Title")
-            print("-" * 80)
-            # Print results in tab-separated format
-            for result in results:
-                print(f"{result['Company']}\t{result['Location']}\t{result['Job Title']}")
+            print_results(results)
         else:
             print("\nNo matching records found!")
 
