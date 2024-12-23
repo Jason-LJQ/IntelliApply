@@ -6,6 +6,9 @@
 
 import pandas as pd
 import re
+import shutil
+import signal
+import sys
 
 
 def get_abbreviation(name):
@@ -40,7 +43,11 @@ def normalize_company_name(name):
 
 def format_location(location):
     """Convert multi-line location to single line with semicolons"""
-    return '; '.join(str(location).strip().split('\n'))
+    formatted = '; '.join(str(location).strip().split('\n'))
+    # Limit location length to 50 characters
+    if len(formatted) > 70:
+        return formatted[:70] + '...'
+    return formatted
 
 
 def print_results(results):
@@ -176,26 +183,41 @@ def search_applications(excel_file, search_term):
         return []
 
 
+def signal_handler(sig, frame):
+    print('\nExiting ...')
+    sys.exit(0)
+
 def main():
     excel_file = '/Users/jason/Library/CloudStorage/OneDrive-Personal/Graduate Study/17-677-I Internship for Software Engineers - Summer 2025/Book1.xlsx'
+    
+    # Set up signal handler for SIGINT
+    signal.signal(signal.SIGINT, signal_handler)
 
-    while True:
-        search_term = input("\nEnter search keyword (or 'exit' to quit): ").strip()
+    try:
+        while True:
+            search_term = input("\nEnter search keyword (or 'exit' to quit): ").strip()
 
-        if search_term.lower() == 'exit':
-            break
+            if search_term.lower() == 'exit':
+                print("Exiting ...")
+                break
 
-        if not search_term:
-            print("Search keyword cannot be empty!")
-            continue
+            if not search_term:
+                print("Search keyword cannot be empty!")
+                continue
 
-        results = search_applications(excel_file, search_term)
+            results = search_applications(excel_file, search_term)
 
-        if results:
-            print_results(results)
-        else:
-            print("\nNo matching records found!")
+            if results:
+                print_results(results)
+            else:
+                print("\nNo matching records found!")
 
+            # columns, _ = shutil.get_terminal_size()
+            # print("-" * columns)
+
+    except KeyboardInterrupt:
+        print('\nExiting ...')
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()
