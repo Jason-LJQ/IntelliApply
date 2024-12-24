@@ -44,7 +44,7 @@ def normalize_company_name(name):
 def format_location(location):
     """Convert multi-line location to single line with semicolons"""
     formatted = '; '.join(str(location).strip().split('\n'))
-    # Limit location length to 50 characters
+    # Limit location length
     if len(formatted) > 70:
         return formatted[:70] + '...'
     return formatted
@@ -52,7 +52,7 @@ def format_location(location):
 
 def print_results(results):
     if not results:
-        print("\nNo matching records found!")
+        print("\nNot found.")
         return
 
     print(f"\nFound {len(results)} matching records:")
@@ -89,48 +89,48 @@ def print_results(results):
         ))
 
 
-def is_company_match(company1, company2):
+def is_company_match(keyword, target):
     """
     Compare if two company names match, considering exact matches and abbreviations
     """
-    if not isinstance(company1, str) or not isinstance(company2, str):
+    if not isinstance(keyword, str) or not isinstance(target, str):
         return False
 
     # Normalize both company names
-    norm_company1 = normalize_company_name(company1)
-    norm_company2 = normalize_company_name(company2)
+    norm_keyword = normalize_company_name(keyword)
+    norm_target = normalize_company_name(target)
 
     # Direct comparison after normalization
-    if norm_company1 == norm_company2:
+    if norm_keyword == norm_target:
         return True
 
     # Get abbreviations
-    abbr1 = get_abbreviation(company1)
-    abbr2 = get_abbreviation(company2)
+    abbr1 = get_abbreviation(keyword)
+    abbr2 = get_abbreviation(target)
 
     # Compare abbreviation with full name and vice versa
     if len(abbr1) > 1:
         if abbr1 == abbr2:
             return True
-        # Check if abbr1 matches the first letters of norm_company2's words
-        if abbr1 == get_abbreviation(norm_company2):
+        # Check if abbr1 matches the first letters of norm_target's words
+        if abbr1 == get_abbreviation(norm_target):
             return True
 
     if len(abbr2) > 1:
-        # Check if abbr2 matches the first letters of norm_company1's words
-        if abbr2 == get_abbreviation(norm_company1):
+        # Check if abbr2 matches the first letters of norm_keyword's words
+        if abbr2 == get_abbreviation(norm_keyword):
             return True
 
     # Additional comparison: check if abbreviation of one matches normalized other
-    abbr1 = get_abbreviation(norm_company1)
-    abbr2 = get_abbreviation(norm_company2)
-    
-    if abbr1 == norm_company2 or abbr2 == norm_company1:
+    abbr1 = get_abbreviation(norm_keyword)
+    abbr2 = get_abbreviation(norm_target)
+
+    if abbr1 == norm_target or abbr2 == norm_keyword:
         return True
 
     # Handle case where one is abbreviation and other is full name
-    words1 = norm_company1.split()
-    words2 = norm_company2.split()
+    words1 = norm_keyword.split()
+    words2 = norm_target.split()
 
     if len(words1) >= 2 and len(words2) >= 2:
         # Check if the initials of one match the other's abbreviation
@@ -138,6 +138,11 @@ def is_company_match(company1, company2):
         initials2 = ''.join(word[0].upper() for word in words2)
 
         if initials1 == abbr2 or initials2 == abbr1:
+            return True
+
+    # Check if keyword is the substring of target from the beginning
+    if norm_keyword and norm_target:
+        if norm_target.startswith(norm_keyword) :
             return True
 
     return False
@@ -162,7 +167,7 @@ def search_applications(excel_file, search_term):
 
         for index, row in df.iterrows():
             # Check company name match
-            if is_company_match(row['Company'], search_term):
+            if is_company_match(search_term, row['Company']):
                 matches.append({
                     'Company': row['Company'],
                     'Location': row['Location'],
@@ -187,9 +192,10 @@ def signal_handler(sig, frame):
     print('\nExiting ...')
     sys.exit(0)
 
+
 def main():
     excel_file = '/Users/jason/Library/CloudStorage/OneDrive-Personal/Graduate Study/17-677-I Internship for Software Engineers - Summer 2025/Book1.xlsx'
-    
+
     # Set up signal handler for SIGINT
     signal.signal(signal.SIGINT, signal_handler)
 
@@ -218,6 +224,7 @@ def main():
     except KeyboardInterrupt:
         print('\nExiting ...')
         sys.exit(0)
+
 
 if __name__ == "__main__":
     main()
