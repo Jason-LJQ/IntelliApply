@@ -291,13 +291,49 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 
+def delete_last_row(excel_file):
+    """
+    Deletes the last row in the Excel file after user confirmation.
+    """
+    try:
+        workbook = load_workbook(filename=excel_file)
+        sheet = workbook.active
+        last_row = sheet.max_row
+
+        if last_row <= 1:
+            print("No data to delete.")
+            workbook.close()
+            return
+
+        # Display the last row's data for confirmation
+        last_row_data = [cell.value for cell in sheet[last_row]]
+        headers = [cell.value for cell in sheet[1]]
+        print("Last row data:")
+        for header, value in zip(headers, last_row_data):
+            print(f"{header}: {value}")
+
+        # Ask for user confirmation
+        confirm = input("Delete this row? (y/Y to confirm, any other key to cancel): ").lower()
+        if confirm == 'y':
+            sheet.delete_rows(last_row)
+            workbook.save(filename=excel_file)
+            print("Last row deleted successfully.")
+        else:
+            print("Deletion cancelled.")
+
+        workbook.close()
+
+    except Exception as e:
+        print(f"Error deleting last row: {str(e)}")
+
+
 def main(excel_file):
     # Set up signal handler for SIGINT
     signal.signal(signal.SIGINT, signal_handler)
 
     try:
         while True:
-            print("\nEnter search keyword, paste Markdown table (or 'exit' to quit):")
+            print("\nEnter search keyword, paste Markdown table, 'delete' to delete last row (or 'exit' to quit):")
             user_input_lines = []
             line_count = 0
             while line_count < 3:
@@ -316,6 +352,10 @@ def main(excel_file):
                 print("Exiting ...")
                 break
 
+            if user_input.lower() == 'delete':
+                delete_last_row(excel_file)
+                continue
+            
             if not user_input:
                 print("Search keyword cannot be empty!")
                 continue
