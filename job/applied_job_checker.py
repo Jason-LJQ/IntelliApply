@@ -142,7 +142,7 @@ def is_company_match(keyword, target):
 
     # Check if keyword is the substring of target from the beginning
     if norm_keyword and norm_target:
-        if norm_target.startswith(norm_keyword) :
+        if norm_target.startswith(norm_keyword):
             return True
 
     return False
@@ -188,43 +188,133 @@ def search_applications(excel_file, search_term):
         return []
 
 
+def parse_markdown_table(markdown_table_string):
+    """
+    Parses a Markdown table string and returns a list of dictionaries,
+    where each dictionary represents a row in the table.
+    """
+    lines = markdown_table_string.strip().split('\n')
+    if len(lines) < 3:
+        return []  # Not a valid Markdown table
+
+    # Extract headers
+    headers = [header.strip() for header in lines[0].split('|') if header.strip()]
+
+    # Extract rows
+    data = []
+    for line in lines[2:]:
+        values = [value.strip() for value in line.split('|') if value.strip()]
+        if len(values) == len(headers):
+            data.append(dict(zip(headers, values)))
+    return data
+
+
+def append_data_to_excel(excel_file, data):
+    """
+    Appends a list of dictionaries to the end of the Excel file.
+    Adds a blank "Result" column if it doesn't exist.
+    """
+    try:
+        # Read the existing Excel file
+        df = pd.read_excel(excel_file)
+
+        # Add a blank "Result" column if it doesn't exist
+        if 'Result' not in df.columns:
+            df['Result'] = ''
+
+        # Create a DataFrame from the new data
+        new_df = pd.DataFrame(data)
+
+        # Reorder columns to match existing DataFrame
+        new_df = new_df.reindex(columns=df.columns, fill_value='')
+
+        # Append the new data to the existing DataFrame
+        updated_df = pd.concat([df, new_df], ignore_index=True)
+
+        # Write the updated DataFrame back to the Excel file
+        updated_df.to_excel(excel_file, index=False)
+
+    except Exception as e:
+        print(f"Error appending data to Excel: {str(e)}")
+
+
 def signal_handler(sig, frame):
     print('\nExiting ...')
     sys.exit(0)
 
 
-def main():
-    excel_file = '/Users/jason/Library/CloudStorage/OneDrive-Personal/Graduate Study/17-677-I Internship for Software Engineers - Summer 2025/Book1.xlsx'
-
+def main(excel_file):
     # Set up signal handler for SIGINT
     signal.signal(signal.SIGINT, signal_handler)
 
     try:
         while True:
-            search_term = input("\nEnter search keyword (or 'exit' to quit): ").strip()
+            print("\nEnter search keyword, paste Markdown table (or 'exit' to quit):")
+            user_input_lines = []
+            line_count = 0
+            while line_count < 3:
+                line = input()
+                if not line:
+                    break
+                if "|" not in line: # Not a Markdown table
+                    user_input_lines.append(line)
+                    break
+                user_input_lines.append(line)
+                line_count += 1
 
-            if search_term.lower() == 'exit':
+            user_input = '\n'.join(user_input_lines).strip()
+
+            if user_input.lower() == 'exit':
                 print("Exiting ...")
                 break
 
-            if not search_term:
+            if not user_input:
                 print("Search keyword cannot be empty!")
                 continue
 
-            results = search_applications(excel_file, search_term)
+            if is_markdown_table(user_input):
+                # Parse the Markdown table
+                data = parse_markdown_table(user_input)
 
-            if results:
-                print_results(results)
+                if not data:
+                    print("Invalid Markdown table format.")
+                    continue
+
+                # Append the data to the Excel file
+                append_data_to_excel(excel_file, data)
+                print("New record successfully appended to Excel file.")
+
             else:
-                print("\nNo matching records found!")
-
-            # columns, _ = shutil.get_terminal_size()
-            # print("-" * columns)
+                results = search_applications(excel_file, user_input)
+                if results:
+                    print_results(results)
+                else:
+                    print("\nNo matching records found.")
 
     except KeyboardInterrupt:
         print('\nExiting ...')
         sys.exit(0)
 
 
+def is_markdown_table(input_string):
+    """
+    Checks if the input string is likely a Markdown table.
+    This is a heuristic check and may not be 100% accurate.
+    """
+    lines = input_string.strip().split('\n')
+    if len(lines) < 3:
+        return False  # Not enough lines for a table
+
+    # Check for at least one | in the header and data lines
+    if '|' not in lines[0]:
+        return False
+
+    for line in lines[2:]:
+        if '|' not in line:
+            return False
+
+    return True
+
+
 if __name__ == "__main__":
-    main()
+    main(excel_file = '/Users/jason/Library/CloudStorage/OneDrive-Personal/Graduate Study/17-677-I Internship for Software Engineers - Summer 2025/Book1 copy.xlsx')
