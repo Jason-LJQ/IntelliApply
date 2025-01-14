@@ -9,6 +9,8 @@ import re
 import shutil
 import signal
 import sys
+from openpyxl import load_workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
 
 
 def get_abbreviation(name):
@@ -211,28 +213,37 @@ def parse_markdown_table(markdown_table_string):
 
 def append_data_to_excel(excel_file, data):
     """
-    Appends a list of dictionaries to the end of the Excel file.
+    Appends a list of dictionaries to the end of the Excel file using openpyxl.
+    Automatically determines the column letters for "Company", "Location", "Job Title", and "Result".
     Adds a blank "Result" column if it doesn't exist.
     """
     try:
-        # Read the existing Excel file
-        df = pd.read_excel(excel_file)
+        # Load the existing Excel file
+        workbook = load_workbook(filename=excel_file)
+        sheet = workbook.active
+
+        # Find the last row with data (or the header row if the sheet is empty)
+        last_row = sheet.max_row if sheet.max_row > 1 else 1
+
+        # Get the headers and their column indices
+        headers = {cell.value: cell.column for cell in sheet[1]}
 
         # Add a blank "Result" column if it doesn't exist
-        if 'Result' not in df.columns:
-            df['Result'] = ''
+        if 'Result' not in headers:
+            headers['Result'] = len(headers) + 1
+            sheet.cell(row=1, column=headers['Result'], value='Result')
 
-        # Create a DataFrame from the new data
-        new_df = pd.DataFrame(data)
+        # Append the new data directly to the last row
+        for row_data in data:
+            last_row += 1  # Move to the next row for each new record
 
-        # Reorder columns to match existing DataFrame
-        new_df = new_df.reindex(columns=df.columns, fill_value='')
+            # Write data to the corresponding columns
+            sheet.cell(row=last_row, column=headers.get('Company', 1), value=row_data.get('Company', ''))
+            sheet.cell(row=last_row, column=headers.get('Location', 1), value=row_data.get('Location', ''))
+            sheet.cell(row=last_row, column=headers.get('Job Title', 1), value=row_data.get('Job Title', ''))
 
-        # Append the new data to the existing DataFrame
-        updated_df = pd.concat([df, new_df], ignore_index=True)
-
-        # Write the updated DataFrame back to the Excel file
-        updated_df.to_excel(excel_file, index=False)
+        # Save the updated workbook
+        workbook.save(filename=excel_file)
 
     except Exception as e:
         print(f"Error appending data to Excel: {str(e)}")
