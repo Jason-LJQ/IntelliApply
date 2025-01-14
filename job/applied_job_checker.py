@@ -52,14 +52,42 @@ def format_location(location):
     return formatted
 
 
-def print_results(results):
+def get_result_status(workbook, row_index):
+    """
+    Checks if the 'Result' cell at the given row index has any fill color.
+    Returns 'x' if any fill color is found, otherwise returns an empty string.
+    """
+    try:
+        sheet = workbook.active
+        headers = {cell.value: cell.column for cell in sheet[1]}
+
+        if 'Result' not in headers:
+            return ''
+
+        result_cell = sheet.cell(row=row_index, column=headers['Result'])
+
+        # Check if the cell has any fill color
+        if result_cell.fill.start_color.rgb == '00000000':
+            return ''
+        else:
+            return '  ⨉  '
+
+    except Exception as e:
+        print(f"Error reading cell color: {str(e)}")
+        return ''
+
+
+def print_results(results, excel_file):
+    """
+    Prints the search results, including the 'Result' column with 'x' for colored cells.
+    """
     if not results:
         print("\nNot found.")
         return
 
     print(f"\nFound {len(results)} matching records:")
 
-    # Calculate maximum widths for each column
+    # Calculate maximum widths for each column, including 'Result'
     company_width = max(len(str(r['Company'])) for r in results)
     company_width = max(company_width, len("Company"))
 
@@ -69,25 +97,30 @@ def print_results(results):
     job_width = max(len(str(r['Job Title'])) for r in results)
     job_width = max(job_width, len("Job Title"))
 
-    # Print header
-    print("\n{:<{width1}}  {:<{width2}}  {:<{width3}}".format(
-        "Company", "Location", "Job Title",
-        width1=company_width,
-        width2=location_width,
-        width3=job_width
+    result_width = max(len(str(r.get('Result', ''))) for r in results)
+    result_width = max(result_width, len("Result"))
+
+    # Print header, including 'Result'
+    print("\n{:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
+        "Result", "Company", "Location", "Job Title",
+        width1=result_width,
+        width2=company_width,
+        width3=location_width,
+        width4=job_width
     ))
-    print("-" * (company_width + location_width + job_width + 4))
+    print("-" * (company_width + location_width + job_width + result_width + 4))
 
     # Print results
     for result in results:
-        formatted_location = format_location(result['Location'])
-        print("{:<{width1}}  {:<{width2}}  {:<{width3}}".format(
+        print("{:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
+            str(result['result']),
             str(result['Company']),
-            formatted_location,
+            format_location(result['Location']),
             str(result['Job Title']),
-            width1=company_width,
-            width2=location_width,
-            width3=job_width
+            width1=result_width,
+            width2=company_width,
+            width3=location_width,
+            width4=job_width
         ))
 
 
@@ -166,6 +199,7 @@ def search_applications(excel_file, search_term):
 
         matches = []
         search_term_lower = search_term.lower().strip()
+        workbook = load_workbook(filename=excel_file)
 
         for index, row in df.iterrows():
             # Check company name match
@@ -173,16 +207,19 @@ def search_applications(excel_file, search_term):
                 matches.append({
                     'Company': row['Company'],
                     'Location': row['Location'],
-                    'Job Title': row['Job Title']
+                    'Job Title': row['Job Title'],
+                    'result': get_result_status(workbook, index + 2),
                 })
             # Check exact job title match
             elif search_term_lower in row['Job Title'].lower():
                 matches.append({
                     'Company': row['Company'],
                     'Location': row['Location'],
-                    'Job Title': row['Job Title']
+                    'Job Title': row['Job Title'],
+                    'result': get_result_status(workbook, index + 2),
                 })
 
+        workbook.close()
         return matches
 
     except Exception as e:
@@ -267,7 +304,7 @@ def main(excel_file):
                 line = input()
                 if not line:
                     break
-                if "|" not in line: # Not a Markdown table
+                if "|" not in line:  # Not a Markdown table
                     user_input_lines.append(line)
                     break
                 user_input_lines.append(line)
@@ -298,7 +335,7 @@ def main(excel_file):
             else:
                 results = search_applications(excel_file, user_input)
                 if results:
-                    print_results(results)
+                    print_results(results, excel_file)
                 else:
                     print("\nNo matching records found.")
 
@@ -328,4 +365,5 @@ def is_markdown_table(input_string):
 
 
 if __name__ == "__main__":
-    main(excel_file = '/Users/jason/Library/CloudStorage/OneDrive-Personal/Graduate Study/17-677-I Internship for Software Engineers - Summer 2025/Book1 copy.xlsx')
+    main(
+        excel_file='/Users/jason/Library/CloudStorage/OneDrive-Personal/Graduate Study/17-677-I Internship for Software Engineers - Summer 2025/Book1.xlsx')
