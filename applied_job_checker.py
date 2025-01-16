@@ -11,6 +11,11 @@ import signal
 import sys
 from openpyxl import load_workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
+from openai import OpenAI
+from credential import *
+import json
+
+client = OpenAI(api_key=OPENAI_API_KEY, base_url=BASE_URL)
 
 
 def get_abbreviation(name):
@@ -251,8 +256,8 @@ def parse_markdown_table(markdown_table_string):
 def append_data_to_excel(excel_file, data):
     """
     Appends a list of dictionaries to the end of the Excel file using openpyxl.
-    Automatically determines the column letters for "Company", "Location", "Job Title", and "Result".
-    Adds a blank "Result" column if it doesn't exist.
+    Automatically determines the column letters for all fields.
+    Adds missing columns if they don't exist.
     """
     try:
         # Load the existing Excel file
@@ -265,19 +270,26 @@ def append_data_to_excel(excel_file, data):
         # Get the headers and their column indices
         headers = {cell.value: cell.column for cell in sheet[1]}
 
-        # Add a blank "Result" column if it doesn't exist
-        if 'Result' not in headers:
-            headers['Result'] = len(headers) + 1
-            sheet.cell(row=1, column=headers['Result'], value='Result')
+        # List of all possible columns
+        all_columns = ['Company', 'Location', 'Job Title', 'Code', 'Type']
+
+        # Add any missing columns
+        next_column = len(headers) + 1
+        for column in all_columns:
+            if column not in headers:
+                headers[column] = next_column
+                sheet.cell(row=1, column=next_column, value=column)
+                next_column += 1
 
         # Append the new data directly to the last row
         for row_data in data:
             last_row += 1  # Move to the next row for each new record
 
             # Write data to the corresponding columns
-            sheet.cell(row=last_row, column=headers.get('Company', 1), value=row_data.get('Company', ''))
-            sheet.cell(row=last_row, column=headers.get('Location', 1), value=row_data.get('Location', ''))
-            sheet.cell(row=last_row, column=headers.get('Job Title', 1), value=row_data.get('Job Title', ''))
+            for column in all_columns:
+                if column != 'Result':  # Skip Result column as it's handled separately
+                    sheet.cell(row=last_row, column=headers[column], 
+                             value=row_data.get(column, ''))
 
         # Save the updated workbook
         workbook.save(filename=excel_file)
@@ -327,17 +339,94 @@ def delete_last_row(excel_file):
         print(f"Error deleting last row: {str(e)}")
 
 
-def main(excel_file):
+def process_webpage_content(content):
+    """
+    Process webpage content through OpenAI API and return structured data.
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": content}
+            ],
+            temperature=0.1
+        )
+
+        print(response)
+        
+        # Parse the response
+        result = response.choices[0].message.content
+        result = result.replace("```json", "").replace("```", "").replace("\n", "")
+        result = json.loads(result)
+        return result
+    except Exception as e:
+        print(f"Error processing content through OpenAI: {str(e)}")
+        return {"isValid": False}
+
+
+def handle_webpage_content(content, excel_file):
+    """
+    Handle webpage content: process it and add to Excel if valid
+    """
+    # Remove extra blank lines
+    cleaned_content = '\n'.join(line for line in content.split('\n') if line.strip())
+    
+    # Process through OpenAI
+    result = process_webpage_content(cleaned_content)
+    
+    if result.get('isValid', False):
+        # Prepare data for Excel
+        data = [{
+            'Company': result['Company'],
+            'Location': result['Location'],
+            'Job Title': result['Job Title'],
+            'Code': result.get('Code', ''),  # Optional field
+            'Type': result.get('Type', '')   # Optional field
+        }]
+        
+        # Add to Excel
+        append_data_to_excel(excel_file, data) 
+        
+        # Display result
+        print("\nSuccessfully extracted and added to Excel:")
+        print(f"Company: {result['Company']}")
+        print(f"Location: {result['Location']}")
+        print(f"Job Title: {result['Job Title']}")
+        if result.get('Code'):
+            print(f"Code: {result['Code']}")
+        if result.get('Type'):
+            print(f"Type: {result['Type']}")
+    else:
+        print("\nCould not extract valid information from the content.")
+
+
+def main(excel_file=EXCEL_FILE_PATH):
     # Set up signal handler for SIGINT
     signal.signal(signal.SIGINT, signal_handler)
 
     try:
         while True:
-            print("\nEnter search keyword, paste Markdown table, 'delete' to delete last row (or 'exit' to quit):")
+            print("\nEnter search keyword, paste Markdown table, webpage content (starting with '---'), 'delete' to delete last row (or 'exit' to quit):")
             user_input_lines = []
             line_count = 0
+            is_webpage_content = False
             while line_count < 3:
-                line = input()
+                line = input("> ")
+
+                if line.startswith('---'):
+                    is_webpage_content = True
+                    user_input_lines.append(line)
+                    try:
+                        while True:
+                            line = input()
+                            user_input_lines.append(line)
+                    except (EOFError, KeyboardInterrupt):
+                        content = '\n'.join(user_input_lines)
+                        handle_webpage_content(content, excel_file)
+                        break
+
                 if not line:
                     break
                 if "|" not in line:  # Not a Markdown table
@@ -345,14 +434,17 @@ def main(excel_file):
                     break
                 user_input_lines.append(line)
                 line_count += 1
+                
+            if is_webpage_content:
+                continue
 
             user_input = '\n'.join(user_input_lines).strip()
 
-            if user_input.lower() == 'exit':
+            if user_input.strip().lower() == 'exit':
                 print("Exiting ...")
                 break
 
-            if user_input.lower() == 'delete':
+            if user_input.strip().lower() == 'delete':
                 delete_last_row(excel_file)
                 continue
             
@@ -405,5 +497,4 @@ def is_markdown_table(input_string):
 
 
 if __name__ == "__main__":
-    main(
-        excel_file='/Users/jason/Library/CloudStorage/OneDrive-Personal/Graduate Study/17-677-I Internship for Software Engineers - Summer 2025/Book1.xlsx')
+    main()
