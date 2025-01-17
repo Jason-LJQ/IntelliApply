@@ -3,7 +3,7 @@
 # Date: 2024-12-22
 # Description: A simple script to search for job applications in an Excel file
 ############################################
-
+import time
 import pandas as pd
 import re
 import shutil
@@ -288,8 +288,8 @@ def append_data_to_excel(excel_file, data):
             # Write data to the corresponding columns
             for column in all_columns:
                 if column != 'Result':  # Skip Result column as it's handled separately
-                    sheet.cell(row=last_row, column=headers[column], 
-                             value=row_data.get(column, ''))
+                    sheet.cell(row=last_row, column=headers[column],
+                               value=row_data.get(column, ''))
 
         # Save the updated workbook
         workbook.save(filename=excel_file)
@@ -343,7 +343,7 @@ def process_webpage_content(content):
     """
     Process webpage content through OpenAI API and return structured data.
     """
-    
+
     try:
         response = client.chat.completions.create(
             model=MODEL,
@@ -355,7 +355,7 @@ def process_webpage_content(content):
         )
 
         print(response)
-        
+
         # Parse the response
         result = response.choices[0].message.content
         result = result.replace("```json", "").replace("```", "").replace("\n", "")
@@ -372,10 +372,10 @@ def handle_webpage_content(content, excel_file):
     """
     # Remove extra blank lines
     cleaned_content = '\n'.join(line for line in content.split('\n') if line.strip())
-    
+
     # Process through OpenAI
     result = process_webpage_content(cleaned_content)
-    
+
     if result.get('isValid', False):
         # Prepare data for Excel
         data = [{
@@ -383,12 +383,12 @@ def handle_webpage_content(content, excel_file):
             'Location': result['Location'],
             'Job Title': result['Job Title'],
             'Code': result.get('Code', ''),  # Optional field
-            'Type': result.get('Type', '')   # Optional field
+            'Type': result.get('Type', '')  # Optional field
         }]
-        
+
         # Add to Excel
-        append_data_to_excel(excel_file, data) 
-        
+        append_data_to_excel(excel_file, data)
+
         # Display result
         print("\nSuccessfully extracted and added to Excel:")
         print(f"Company: {result['Company']}")
@@ -402,25 +402,57 @@ def handle_webpage_content(content, excel_file):
         print("\nCould not extract valid information from the content.")
 
 
+def detect_ending(min_threshold=0.05, max_threshold=0.5):
+    """
+    Detect double Enter press within threshold seconds
+    Returns the entered line and a boolean indicating if double Enter was detected
+    """
+
+    def end_char_check(line):
+        return line.strip().endswith('>') or line.strip().endswith('```')
+
+    line = input()
+    if line:
+        if end_char_check(line):
+            return line, True
+        return line, False
+
+    # First empty line detected, start timing
+    start_time = time.time()
+    try:
+        line = input()
+        # If second line is entered within threshold seconds
+        if not line and min_threshold <= (time.time() - start_time) <= max_threshold:
+            return '', True
+        elif end_char_check(line):
+            return line, True
+        return line, False
+    except (EOFError, KeyboardInterrupt):
+        return '', True
+
+
 def main(excel_file=EXCEL_FILE_PATH):
     # Set up signal handler for SIGINT
     signal.signal(signal.SIGINT, signal_handler)
 
     try:
         while True:
-            print("\nEnter search keyword, paste Markdown table, webpage content (starting with '---'), 'delete' to delete last row (or 'exit' to quit):")
+            print(
+                "\nEnter search keyword, paste Markdown table, webpage content (starting with '<' or '```'), 'delete' to delete last row (or 'exit' to quit):")
             user_input_lines = []
             line_count = 0
             is_webpage_content = False
             while line_count < 3:
-                line = input("> ")
+                line = input("> ").lstrip()
 
-                if line.startswith('---'):
+                if line.startswith('<') or line.startswith('>') or line.startswith('```'):
                     is_webpage_content = True
                     user_input_lines.append(line)
                     try:
                         while True:
-                            line = input()
+                            line, finished = detect_ending()
+                            if finished:
+                                raise KeyboardInterrupt
                             user_input_lines.append(line)
                     except (EOFError, KeyboardInterrupt):
                         content = '\n'.join(user_input_lines)
@@ -434,7 +466,7 @@ def main(excel_file=EXCEL_FILE_PATH):
                     break
                 user_input_lines.append(line)
                 line_count += 1
-                
+
             if is_webpage_content:
                 continue
 
@@ -447,7 +479,7 @@ def main(excel_file=EXCEL_FILE_PATH):
             if user_input.strip().lower() == 'delete':
                 delete_last_row(excel_file)
                 continue
-            
+
             if not user_input:
                 print("Search keyword cannot be empty!")
                 continue
