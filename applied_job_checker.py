@@ -52,7 +52,7 @@ def format_location(location):
     """Convert multi-line location to single line with semicolons"""
     formatted = '; '.join(str(location).strip().split('\n'))
     # Limit location length
-    if len(formatted) > 70:
+    if len(formatted) > 65:
         return formatted[:70] + '...'
     return formatted
 
@@ -411,7 +411,7 @@ def detect_ending(min_threshold=0.05, max_threshold=0.5):
     def end_char_check(line):
         return line.strip().endswith('>') or line.strip().endswith('```')
 
-    line = input()
+    line = input("| ")
     if line:
         if end_char_check(line):
             return line, True
@@ -420,7 +420,7 @@ def detect_ending(min_threshold=0.05, max_threshold=0.5):
     # First empty line detected, start timing
     start_time = time.time()
     try:
-        line = input()
+        line = input("| ")
         # If second line is entered within threshold seconds
         if not line and min_threshold <= (time.time() - start_time) <= max_threshold:
             return '', True
@@ -437,8 +437,9 @@ def main(excel_file=EXCEL_FILE_PATH):
 
     try:
         while True:
+            print("\n" + "-" * 100)
             print(
-                "\nEnter search keyword, paste Markdown table, webpage content (starting with '<' or '```'), 'delete' to delete last row (or 'exit' to quit):")
+                "Enter search keyword, paste Markdown table, webpage content (starting with '<' or '```'), 'delete' to delete last row (or 'exit' to quit):")
             user_input_lines = []
             line_count = 0
             is_webpage_content = False
@@ -455,6 +456,8 @@ def main(excel_file=EXCEL_FILE_PATH):
                                 raise KeyboardInterrupt
                             user_input_lines.append(line)
                     except (EOFError, KeyboardInterrupt):
+                        print("|" + "-" * 99)
+                        print("Webpage content detected. Processing ...")
                         content = '\n'.join(user_input_lines)
                         handle_webpage_content(content, excel_file)
                         break
