@@ -14,6 +14,9 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 from openai import OpenAI
 from credential import *
 import json
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urlparse
 
 client = OpenAI(api_key=OPENAI_API_KEY, base_url=BASE_URL)
 
@@ -366,10 +369,51 @@ def process_webpage_content(content):
         return {"isValid": False}
 
 
+def fetch_webpage_content(url):
+    """
+    Fetch content from a URL and extract the main text content.
+    """
+    try:
+        # Add User-Agent header to mimic a browser request
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+
+        # Parse HTML content
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Remove script and style elements
+        for script in soup(["script", "style"]):
+            script.decompose()
+
+        # Get text content
+        text = soup.get_text(separator='\n')
+
+        # Clean up text
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        cleaned_text = '\n'.join(lines)
+
+        return cleaned_text
+    except Exception as e:
+        print(f"Error fetching webpage: {str(e)}")
+        return None
+
+
 def handle_webpage_content(content, excel_file):
     """
     Handle webpage content: process it and add to Excel if valid
     """
+    # Check if content is a URL
+    if content.strip().startswith(('http://', 'https://')):
+        print("\nFetching content from URL...")
+        webpage_content = fetch_webpage_content(content)
+        if not webpage_content:
+            print("Failed to fetch webpage content.")
+            return
+        content = webpage_content
+
     # Remove extra blank lines
     cleaned_content = '\n'.join(line for line in content.split('\n') if line.strip())
 
@@ -431,6 +475,26 @@ def detect_ending(min_threshold=0.05, max_threshold=0.5):
         return '', True
 
 
+def is_markdown_table(input_string):
+    """
+    Checks if the input string is likely a Markdown table.
+    This is a heuristic check and may not be 100% accurate.
+    """
+    lines = input_string.strip().split('\n')
+    if len(lines) < 3:
+        return False  # Not enough lines for a table
+
+    # Check for at least one | in the header and data lines
+    if '|' not in lines[0]:
+        return False
+
+    for line in lines[2:]:
+        if '|' not in line:
+            return False
+
+    return True
+
+
 def main(excel_file=EXCEL_FILE_PATH):
     # Set up signal handler for SIGINT
     signal.signal(signal.SIGINT, signal_handler)
@@ -439,12 +503,19 @@ def main(excel_file=EXCEL_FILE_PATH):
         while True:
             print("\n" + "-" * 100)
             print(
-                "Enter search keyword, paste Markdown table, webpage content (starting with '<' or '```'), 'delete' to delete last row (or 'exit' to quit):")
+                "Enter search keyword, paste Markdown table, URL, webpage content (starting with '<' or '```'), "
+                "'delete' to delete last row "
+                "(or 'exit' to quit):")
             user_input_lines = []
             line_count = 0
             is_webpage_content = False
             while line_count < 3:
                 line = input("> ").lstrip()
+
+                if line.startswith('http://') or line.startswith('https://'):
+                    is_webpage_content = True
+                    user_input_lines.append(line)
+                    break
 
                 if line.startswith('<') or line.startswith('>') or line.startswith('```'):
                     is_webpage_content = True
@@ -456,10 +527,6 @@ def main(excel_file=EXCEL_FILE_PATH):
                                 raise KeyboardInterrupt
                             user_input_lines.append(line)
                     except (EOFError, KeyboardInterrupt):
-                        print("|" + "-" * 99)
-                        print("Webpage content detected. Processing ...")
-                        content = '\n'.join(user_input_lines)
-                        handle_webpage_content(content, excel_file)
                         break
 
                 if not line:
@@ -471,6 +538,10 @@ def main(excel_file=EXCEL_FILE_PATH):
                 line_count += 1
 
             if is_webpage_content:
+                print("|" + "-" * 99)
+                print("Webpage content detected. Processing ...")
+                content = '\n'.join(user_input_lines)
+                handle_webpage_content(content, excel_file)
                 continue
 
             user_input = '\n'.join(user_input_lines).strip()
@@ -509,26 +580,6 @@ def main(excel_file=EXCEL_FILE_PATH):
     except KeyboardInterrupt:
         print('\nExiting ...')
         sys.exit(0)
-
-
-def is_markdown_table(input_string):
-    """
-    Checks if the input string is likely a Markdown table.
-    This is a heuristic check and may not be 100% accurate.
-    """
-    lines = input_string.strip().split('\n')
-    if len(lines) < 3:
-        return False  # Not enough lines for a table
-
-    # Check for at least one | in the header and data lines
-    if '|' not in lines[0]:
-        return False
-
-    for line in lines[2:]:
-        if '|' not in line:
-            return False
-
-    return True
 
 
 if __name__ == "__main__":
