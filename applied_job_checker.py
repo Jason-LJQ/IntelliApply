@@ -547,6 +547,28 @@ def is_markdown_table(input_string):
     return True
 
 
+def open_excel_file(excel_file):
+    """
+    Opens the Excel file using the default application based on the operating system.
+    Returns True if successful, False otherwise.
+    """
+    try:
+        import subprocess
+        import platform
+        system = platform.system()
+        if system == 'Darwin':  # macOS
+            subprocess.run(['open', excel_file])
+        elif system == 'Windows':
+            subprocess.run(['start', '', excel_file], shell=True)
+        else:  # Linux and other OS
+            subprocess.run(['xdg-open', excel_file])
+        print(f"{GREEN}[*] Opening Excel file...{RESET}")
+        return True
+    except Exception as e:
+        print(f"{RED}[*] Error opening file: {str(e)}{RESET}")
+        return False
+
+
 def main(excel_file=EXCEL_FILE_PATH):
     # Set up signal handler for SIGINT
     signal.signal(signal.SIGINT, signal_handler)
@@ -601,6 +623,10 @@ def main(excel_file=EXCEL_FILE_PATH):
             if user_input.strip().lower() == 'exit':
                 print("[*] Exiting ...")
                 break
+
+            if user_input.strip().lower() == 'open':
+                open_excel_file(excel_file)
+                continue
 
             if user_input.strip().lower() == 'delete':
                 try:
