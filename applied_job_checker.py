@@ -12,6 +12,7 @@ import sys
 from openpyxl import load_workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openai import OpenAI
+from config import *
 from credential import *
 import json
 import requests
