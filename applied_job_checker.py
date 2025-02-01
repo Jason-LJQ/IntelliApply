@@ -280,7 +280,7 @@ def append_data_to_excel(excel_file, data):
         headers = {cell.value: cell.column for cell in sheet[1]}
 
         # List of all possible columns
-        all_columns = ['Company', 'Location', 'Job Title', 'Code', 'Type']
+        all_columns = ALL_FIELDS
 
         # Add any missing columns
         next_column = len(headers) + 1
@@ -407,6 +407,35 @@ def fetch_webpage_content(url):
         return None
 
 
+def check_duplicate_entry(excel_file, new_data):
+    """
+    Check if the exact same job entry already exists in the Excel file.
+    Returns True if a duplicate is found, False otherwise.
+    """
+    try:
+        df = pd.read_excel(excel_file)
+
+        # Convert all columns to string for comparison
+        for col in df.columns:
+            df[col] = df[col].astype(str).apply(lambda x: x.strip() if x != 'nan' else '')
+
+        # Check each row for exact match
+        for _, row in df.iterrows():
+            all_fields_match = True
+            for field in ['Company', 'Job Title']:
+                if field in row and field in new_data:
+                    if str(row[field]).strip() != str(new_data[field]).strip():
+                        all_fields_match = False
+                        break
+            if all_fields_match:
+                return row
+        return None
+
+    except Exception as e:
+        print(f"{RED}[*] Error checking for duplicates: {str(e)}{RESET}")
+        return None
+
+
 def handle_webpage_content(content, excel_file):
     """
     Handle webpage content: process it and add to Excel if valid
@@ -437,26 +466,36 @@ def handle_webpage_content(content, excel_file):
             return
 
     # All validations passed, prepare data for Excel
-    data = [{
+    data = {
         'Company': result['Company'],
         'Location': result['Location'],
         'Job Title': result['Job Title'],
         'Code': result.get('Code', ''),  # Optional field
         'Type': result.get('Type', ''),  # Optional field
         'Link': result.get('Link', ''),  # Optional field
-    }]
+    }
+
+    # Check for duplicates
+    duplicate_entry = check_duplicate_entry(excel_file, data)
+    if duplicate_entry is not None:
+        print(f"\n{RED}[*] Warning: This job entry already exists in the Excel file.{RESET}")
+        print(f"Duplicate Entry: {duplicate_entry}")
+        confirm = input("[*] Add it anyway? (y/Y to confirm, any other key to cancel): ").lower()
+        if confirm != 'y':
+            print(f"\n{RED}[*] Addition cancelled.{RESET}")
+            return
 
     # Add to Excel
-    append_data_to_excel(excel_file, data)
+    append_data_to_excel(excel_file, [data])
 
     # Display result
     print(f"\n{GREEN}[*] Successfully extracted and added to Excel:{RESET}")
-    print(f"Company: {data[0]['Company']}")
-    print(f"Location: {data[0]['Location']}")
-    print(f"Job Title: {data[0]['Job Title']}")
-    print(f"Code: {data[0]['Code']}")
-    print(f"Type: {data[0]['Type']}")
-    print(f"Link: {data[0]['Link']}")
+    print(f"Company: {data['Company']}")
+    print(f"Location: {data['Location']}")
+    print(f"Job Title: {data['Job Title']}")
+    print(f"Code: {data['Code']}")
+    print(f"Type: {data['Type']}")
+    print(f"Link: {data['Link']}")
 
 
 def detect_ending(min_threshold=0.05, max_threshold=0.5):
