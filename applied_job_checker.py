@@ -17,7 +17,12 @@ from credential import *
 import json
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse
+from urllib.parse import urlparse  # Add color constants at the top after imports
+
+# Color constants
+RED = '\033[31m'
+GREEN = '\033[32m'
+RESET = '\033[0m'
 
 client = OpenAI(api_key=OPENAI_API_KEY, base_url=BASE_URL)
 
@@ -91,10 +96,10 @@ def print_results(results, excel_file):
     Prints the search results, including the 'Result' column with 'x' for colored cells.
     """
     if not results:
-        print("\nNot found.")
+        print(f"\n{RED}[*] Not found.{RESET}")
         return
 
-    print(f"\nFound {len(results)} matching records:")
+    print(f"\n{GREEN}[*] Found {len(results)} matching records:{RESET}")
 
     # Calculate maximum widths for each column, including 'Result'
     company_width = max(len(str(r['Company'])) for r in results)
@@ -317,30 +322,30 @@ def delete_last_row(excel_file):
         last_row = sheet.max_row
 
         if last_row <= 1:
-            print("No data to delete.")
+            print(f"{RED}[*] No data to delete.{RESET}")
             workbook.close()
             return
 
         # Display the last row's data for confirmation
         last_row_data = [cell.value for cell in sheet[last_row]]
         headers = [cell.value for cell in sheet[1]]
-        print("Last row data:")
+        print("[*] Last row data:")
         for header, value in zip(headers, last_row_data):
             print(f"{header}: {value}")
 
         # Ask for user confirmation
-        confirm = input("Delete this row? (y/Y to confirm, any other key to cancel): ").lower()
+        confirm = input("[*] Delete this row? (y/Y to confirm, any other key to cancel): ").lower()
         if confirm == 'y':
             sheet.delete_rows(last_row)
             workbook.save(filename=excel_file)
-            print("Last row deleted successfully.")
+            print(f"{GREEN}[*] Last row deleted successfully.{RESET}")
         else:
-            print("Deletion cancelled.")
+            print(f"{RED}[*] Deletion cancelled.{RESET}")
 
         workbook.close()
 
     except Exception as e:
-        print(f"Error deleting last row: {str(e)}")
+        print(f"{RED}[*] Error deleting last row: {str(e)}{RESET}")
 
 
 def process_webpage_content(content):
@@ -408,10 +413,10 @@ def handle_webpage_content(content, excel_file):
     """
     # Check if content is a URL
     if content.strip().startswith(('http://', 'https://')):
-        print("\nFetching content from URL...")
+        print("\n[*] Fetching content from URL...")
         webpage_content = fetch_webpage_content(content)
         if not webpage_content:
-            print("Failed to fetch webpage content.")
+            print(f"{RED}[*] Failed to fetch webpage content.{RESET}")
             return
         content = "URL: " + content + "\n" + webpage_content
 
@@ -423,12 +428,12 @@ def handle_webpage_content(content, excel_file):
 
     # Validate required fields one by one
     if not result.get('isValid', False):
-        print("\nInvalid content format.")
+        print(f"\n{RED}[*] Invalid content format.{RESET}")
         return
 
     for field in REQUIRED_FIELDS:
         if field not in result or not str(result[field]).strip():
-            print("\nCould not extract valid information from the content.")
+            print(f"\n{RED}[*] Could not extract valid information from the content.{RESET}")
             return
 
     # All validations passed, prepare data for Excel
@@ -445,7 +450,7 @@ def handle_webpage_content(content, excel_file):
     append_data_to_excel(excel_file, data)
 
     # Display result
-    print("\nSuccessfully extracted and added to Excel:")
+    print(f"\n{GREEN}[*] Successfully extracted and added to Excel:{RESET}")
     print(f"Company: {data[0]['Company']}")
     print(f"Location: {data[0]['Location']}")
     print(f"Job Title: {data[0]['Job Title']}")
@@ -511,8 +516,8 @@ def main(excel_file=EXCEL_FILE_PATH):
         while True:
             print("\n" + "-" * 100)
             print(
-                "Enter search keyword, paste Markdown table, URL, webpage content (starting with '<' or '```'), "
-                "'delete' to delete last row "
+                "[*] Enter search keyword, paste Markdown table, URL, webpage content (starting with '<' or '```'), "
+                "\n'delete' to delete last row "
                 "(or 'exit' to quit):")
             user_input_lines = []
             line_count = 0
@@ -547,7 +552,7 @@ def main(excel_file=EXCEL_FILE_PATH):
 
             if is_webpage_content:
                 print("|" + "-" * 99)
-                print("Webpage content detected. Processing ...")
+                print("[*] Webpage content detected. Processing ...")
                 content = '\n'.join(user_input_lines)
                 handle_webpage_content(content, excel_file)
                 continue
@@ -555,15 +560,19 @@ def main(excel_file=EXCEL_FILE_PATH):
             user_input = '\n'.join(user_input_lines).strip()
 
             if user_input.strip().lower() == 'exit':
-                print("Exiting ...")
+                print("[*] Exiting ...")
                 break
 
             if user_input.strip().lower() == 'delete':
-                delete_last_row(excel_file)
+                try:
+                    delete_last_row(excel_file)
+                except KeyboardInterrupt:
+                    print('\n[*] Deletion cancelled. Send SIGINT again to exit.')
+
                 continue
 
             if not user_input:
-                print("Search keyword cannot be empty!")
+                print(f"{RED}[*] Search keyword cannot be empty!{RESET}")
                 continue
 
             if is_markdown_table(user_input):
@@ -571,22 +580,22 @@ def main(excel_file=EXCEL_FILE_PATH):
                 data = parse_markdown_table(user_input)
 
                 if not data:
-                    print("Invalid Markdown table format.")
+                    print(f"{RED}[*] Invalid Markdown table format.{RESET}")
                     continue
 
                 # Append the data to the Excel file
                 append_data_to_excel(excel_file, data)
-                print("New record successfully appended to Excel file.")
+                print(f"{GREEN}[*] New record successfully appended to Excel file.{RESET}")
 
             else:
                 results = search_applications(excel_file, user_input)
                 if results:
                     print_results(results, excel_file)
                 else:
-                    print("\nNo matching records found.")
+                    print(f"\n{RED}[*] No matching records found.{RESET}")
 
     except KeyboardInterrupt:
-        print('\nExiting ...')
+        print('\n[*] Exiting ...')
         sys.exit(0)
 
 
