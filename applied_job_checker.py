@@ -412,7 +412,7 @@ def handle_webpage_content(content, excel_file):
         if not webpage_content:
             print("Failed to fetch webpage content.")
             return
-        content = webpage_content
+        content = "URL: " + content + "\n" + webpage_content
 
     # Remove extra blank lines
     cleaned_content = '\n'.join(line for line in content.split('\n') if line.strip())
@@ -420,30 +420,37 @@ def handle_webpage_content(content, excel_file):
     # Process through OpenAI
     result = process_webpage_content(cleaned_content)
 
-    if result.get('isValid', False):
-        # Prepare data for Excel
-        data = [{
-            'Company': result['Company'],
-            'Location': result['Location'],
-            'Job Title': result['Job Title'],
-            'Code': result.get('Code', ''),  # Optional field
-            'Type': result.get('Type', '')  # Optional field
-        }]
+    # Validate required fields one by one
+    if not result.get('isValid', False):
+        print("\nInvalid content format.")
+        return
 
-        # Add to Excel
-        append_data_to_excel(excel_file, data)
+    for field in REQUIRED_FIELDS:
+        if field not in result or not str(result[field]).strip():
+            print("\nCould not extract valid information from the content.")
+            return
 
-        # Display result
-        print("\nSuccessfully extracted and added to Excel:")
-        print(f"Company: {result['Company']}")
-        print(f"Location: {result['Location']}")
-        print(f"Job Title: {result['Job Title']}")
-        if result.get('Code'):
-            print(f"Code: {result['Code']}")
-        if result.get('Type'):
-            print(f"Type: {result['Type']}")
-    else:
-        print("\nCould not extract valid information from the content.")
+    # All validations passed, prepare data for Excel
+    data = [{
+        'Company': result['Company'],
+        'Location': result['Location'],
+        'Job Title': result['Job Title'],
+        'Code': result.get('Code', ''),  # Optional field
+        'Type': result.get('Type', ''),  # Optional field
+        'Link': result.get('Link', ''),  # Optional field
+    }]
+
+    # Add to Excel
+    append_data_to_excel(excel_file, data)
+
+    # Display result
+    print("\nSuccessfully extracted and added to Excel:")
+    print(f"Company: {data[0]['Company']}")
+    print(f"Location: {data[0]['Location']}")
+    print(f"Job Title: {data[0]['Job Title']}")
+    print(f"Code: {data[0]['Code']}")
+    print(f"Type: {data[0]['Type']}")
+    print(f"Link: {data[0]['Link']}")
 
 
 def detect_ending(min_threshold=0.05, max_threshold=0.5):
