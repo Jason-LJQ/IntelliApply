@@ -624,7 +624,7 @@ def main(excel_file=EXCEL_FILE_PATH):
                 print("[*] Exiting ...")
                 break
 
-            if user_input.strip().lower() == 'open':
+            if user_input.strip().lower().startswith('open'):
                 open_excel_file(excel_file)
                 continue
 

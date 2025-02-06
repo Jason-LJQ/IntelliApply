@@ -14,7 +14,7 @@ Required fields (if any of these cannot be found, set isValid to false):
 
 Optional fields (these do not affect isValid):
 - Code (e.g., Job ID like SOFTW008765, JR262842, etc.)
-- Type (Work model. e.g., Onsite, Hybrid, Remote, etc.)
+- Type (Select from Onsite, Hybrid, Remote. Otherwise, leave it blank.)
 - Link (URL to the job posting, remove parameters like ?ref=123) (e.g. https://job-boards.greenhouse.io/duolingo/jobs/7582860002)
 
 Return the information in JSON format with the following structure:
