@@ -57,12 +57,12 @@ def normalize_company_name(name):
     return re.sub(r'\s+', ' ', name_lower).strip()
 
 
-def format_location(location):
+def format_string(name, limit=55):
     """Convert multi-line location to single line with semicolons"""
-    formatted = '; '.join(str(location).strip().split('\n'))
+    formatted = '; '.join(str(name).strip().split('\n'))
     # Limit location length
-    if len(formatted) > 65:
-        return formatted[:70] + '...'
+    if len(formatted) > limit:
+        return formatted[:limit] + '...'
     return formatted
 
 
@@ -102,40 +102,71 @@ def print_results(results, excel_file):
     print(f"\n{GREEN}[*] Found {len(results)} matching records:{RESET}")
 
     # Calculate maximum widths for each column, including 'Result'
-    company_width = max(len(str(r['Company'])) for r in results)
+    company_width = max(len(format_string(r['Company'], limit=30)) for r in results)
     company_width = max(company_width, len("Company"))
 
-    location_width = max(len(format_location(r['Location'])) for r in results)
+    location_width = max(len(format_string(r['Location'])) for r in results)
     location_width = max(location_width, len("Location"))
 
-    job_width = max(len(str(r['Job Title'])) for r in results)
+    job_width = max(len(format_string(r['Job Title'], limit=65)) for r in results)
     job_width = max(job_width, len("Job Title"))
 
     result_width = max(len(str(r.get('Result', ''))) for r in results)
     result_width = max(result_width, len("Result"))
 
-    # Print header, including 'Result'
-    print("\n{:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
-        "Result", "Company", "Location", "Job Title",
-        width1=result_width,
-        width2=company_width,
-        width3=location_width,
-        width4=job_width
-    ))
-    print("-" * (company_width + location_width + job_width + result_width + 4))
+    # Check if any Applied Date is valid
+    has_valid_date = any(str(r.get('Applied Date', '')).strip() != '' for r in results)
+    if has_valid_date:
+        date_width = max(len(str(r.get('Applied Date', ''))) for r in results)
+        date_width = max(date_width, len("Applied Date"))
 
-    # Print results
-    for result in results:
-        print("{:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
-            str(result['result']),
-            str(result['Company']),
-            format_location(result['Location']),
-            str(result['Job Title']),
+    # Print header, including 'Result' and 'Applied Date' if valid
+    if has_valid_date:
+        print("\n{:<{width5}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
+            "Applied Date", "Result", "Company", "Location", "Job Title",
+            width5=date_width,
             width1=result_width,
             width2=company_width,
             width3=location_width,
             width4=job_width
         ))
+        print("-" * (company_width + location_width + job_width + result_width + date_width + 8))
+    else:
+        print("\n{:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
+            "Result", "Company", "Location", "Job Title",
+            width1=result_width,
+            width2=company_width,
+            width3=location_width,
+            width4=job_width
+        ))
+        print("-" * (company_width + location_width + job_width + result_width + 6))
+
+    # Print results
+    for result in results:
+        if has_valid_date:
+            print("{:<{width5}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
+                str(result.get('Applied Date', '')),
+                str(result['result']),
+                format_string(result['Company'], limit=30),
+                format_string(result['Location']),
+                format_string(result['Job Title'], limit=65),
+                width5=date_width,
+                width1=result_width,
+                width2=company_width,
+                width3=location_width,
+                width4=job_width
+            ))
+        else:
+            print("{:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
+                str(result['result']),
+                format_string(result['Company'], limit=30),
+                format_string(result['Location']),
+                format_string(result['Job Title'], limit=65),
+                width1=result_width,
+                width2=company_width,
+                width3=location_width,
+                width4=job_width
+            ))
 
 
 def is_company_match(keyword, target):
@@ -215,6 +246,11 @@ def search_applications(excel_file, search_term):
         search_term_lower = search_term.lower().strip()
         workbook = load_workbook(filename=excel_file)
 
+        def applied_date(row):
+            raw = row.get('Applied Date', '')
+            raw = '' if str(raw).strip() == 'nan' else raw
+            return raw
+
         for index, row in df.iterrows():
             # Check company name match
             if is_company_match(search_term, row['Company']):
@@ -222,6 +258,7 @@ def search_applications(excel_file, search_term):
                     'Company': row['Company'],
                     'Location': row['Location'],
                     'Job Title': row['Job Title'],
+                    'Applied Date': applied_date(row),
                     'result': get_result_status(workbook, index + 2),
                 })
             # Check exact job title match
@@ -230,6 +267,7 @@ def search_applications(excel_file, search_term):
                     'Company': row['Company'],
                     'Location': row['Location'],
                     'Job Title': row['Job Title'],
+                    'Applied Date': applied_date(row),
                     'result': get_result_status(workbook, index + 2),
                 })
 
@@ -466,6 +504,7 @@ def handle_webpage_content(content, excel_file):
             return
 
     # All validations passed, prepare data for Excel
+    from datetime import datetime
     data = {
         'Company': result['Company'],
         'Location': result['Location'],
@@ -473,6 +512,7 @@ def handle_webpage_content(content, excel_file):
         'Code': result.get('Code', ''),  # Optional field
         'Type': result.get('Type', ''),  # Optional field
         'Link': result.get('Link', ''),  # Optional field
+        'Applied Date': datetime.now().strftime('%Y-%m-%d'),  # Add current date
     }
 
     # Check for duplicates

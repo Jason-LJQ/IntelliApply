@@ -1,5 +1,5 @@
 REQUIRED_FIELDS = ["Company", "Location", "Job Title"]
-ALL_FIELDS = REQUIRED_FIELDS + ["Code", "Type", "Link"]
+ALL_FIELDS = REQUIRED_FIELDS + ["Code", "Type", "Link", "Applied Date"]
 
 # OpenAI system prompt for job information extraction
 SYSTEM_PROMPT = """You are a helpful assistant that extracts job application information from web content. 
