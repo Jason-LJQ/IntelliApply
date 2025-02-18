@@ -478,12 +478,17 @@ def handle_webpage_content(content, excel_file):
     """
     Handle webpage content: process it and add to Excel if valid
     """
+    # Remove view-source: prefix if present
+    content = content.strip()
+    if content.startswith('view-source:'):
+        content = content[11:]  # Remove 'view-source:' prefix
+    
     # Check if content is a URL
-    if content.strip().startswith(('http://', 'https://')):
+    if content.startswith(('http://', 'https://')):
         print("\n[*] Fetching content from URL...")
         webpage_content = fetch_webpage_content(content)
         if not webpage_content:
-            print(f"{RED}[*] Failed to fetch webpage content.{RESET}")
+            print(f"{RED}[*] Failed to fetch webpage content.{REET}")
             return
         content = "URL: " + content + "\n" + webpage_content
 
@@ -626,7 +631,7 @@ def main(excel_file=EXCEL_FILE_PATH):
             while line_count < 3:
                 line = input("> ").lstrip()
 
-                if line.startswith('http://') or line.startswith('https://'):
+                if line.startswith('http://') or line.startswith('https://') or line.startswith('view-source:'):
                     is_webpage_content = True
                     user_input_lines.append(line)
                     break
