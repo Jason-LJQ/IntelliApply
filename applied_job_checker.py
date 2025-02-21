@@ -3,6 +3,7 @@
 # Date: 2024-12-22
 # Description: A simple script to search for job applications in an Excel file
 ############################################
+import os
 import time
 import pandas as pd
 import re
@@ -23,6 +24,8 @@ from urllib.parse import urlparse  # Add color constants at the top after import
 RED = '\033[31m'
 GREEN = '\033[32m'
 RESET = '\033[0m'
+
+COOKIE_PATH = os.path.join(os.path.dirname(__file__), "cookie.txt")
 
 client = OpenAI(api_key=OPENAI_API_KEY, base_url=BASE_URL)
 
@@ -412,8 +415,78 @@ def process_webpage_content(content):
         print(f"Error processing content through OpenAI: {str(e)}")
         return {"isValid": False}
 
+def save_cookie(cookie_path=COOKIE_PATH):
+    # Prompt the user to paste the cookie in Netscape format
+    print("\nPlease paste the cookie in Netscape format (end with an empty line):")
+    netscape_cookie = []
+    while True:
+        line = input()  # Accept multi-line input
+        if not line.strip():  # End input on an empty line
+            break
+        netscape_cookie.append(line)
 
-def fetch_webpage_content(url):
+    # Write the pasted cookie to the file
+    try:
+        with open(cookie_path, 'w') as f:
+            f.write('\n'.join(netscape_cookie))
+        print(f"Cookie successfully saved to {cookie_path}")
+    except IOError as e:
+        print(f"[ERROR] Failed to save the cookie to {cookie_path}: {e}")
+
+
+def validate_cookie(cookie_path=COOKIE_PATH):
+    """
+    Validate the cookies in the specified cookie file with the provided domain.
+
+    Parameters:
+    - domain (str): The base domain of the target server.
+    - cookie_path (str): Path to the cookie file in Netscape format.
+
+    Returns:
+    - bool: True if the cookies are valid, False otherwise.
+    """
+    domain_keywords = {"https://www.linkedin.com/mypreferences/d/categories/account": ["preferred", "demographic"], "https://app.joinhandshake.com": ["explore", "people"]}
+
+    def parseCookieFile(cookiefile):
+        """Parse a cookies.txt file and return a dictionary of key value pairs
+        compatible with requests."""
+
+        cookies = {}
+        with open(cookiefile, 'r') as fp:
+            for line in fp:
+                if not re.match(r'^\#', line):
+                    lineFields = line.strip().split('\t')
+                    cookies[lineFields[5]] = lineFields[6]
+        return cookies
+
+    try:
+        cookies = parseCookieFile(cookie_path)
+    except FileNotFoundError:
+        print(f"Cookie file not found at path: {cookie_path}")
+        return False
+    except Exception as e:
+        print(f"Failed to load cookies: {e}")
+        return False
+
+    success = True
+    for url, keywords in domain_keywords.items():
+        try:
+            response = requests.get(url, cookies=cookies, timeout=3)
+            if response.status_code == 200 and all(keyword in response.text.lower() for keyword in keywords):
+                print(f"{GREEN}[*] {url} LOGGED IN.{RESET}")
+                success = True
+            else:
+                print(f"{RED}[*] {url} NOT LOGGED IN.{RESET}")
+                success = False
+
+        except requests.RequestException as e:
+            print(f"An error occurred: {e}")
+            return False
+
+    return success
+
+
+def fetch_webpage_content(url, cookie_path=COOKIE_PATH):
     """
     Fetch content from a URL and extract the main text content.
     """
@@ -422,7 +495,16 @@ def fetch_webpage_content(url):
         headers = {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
         }
-        response = requests.get(url, headers=headers, timeout=10)
+
+        # Parse cookies from the cookie file
+        cookies = {}
+        with open(cookie_path, 'r') as fp:
+            for line in fp:
+                if not re.match(r'^\#', line):
+                    lineFields = line.strip().split('\t')
+                    cookies[lineFields[5]] = lineFields[6]
+
+        response = requests.get(url, headers=headers, cookies=cookies, timeout=8)
         response.raise_for_status()
 
         # Parse HTML content
@@ -488,7 +570,7 @@ def handle_webpage_content(content, excel_file):
         print("\n[*] Fetching content from URL...")
         webpage_content = fetch_webpage_content(content)
         if not webpage_content:
-            print(f"{RED}[*] Failed to fetch webpage content.{REET}")
+            print(f"{RED}[*] Failed to fetch webpage content.{RESET}")
             return
         content = "URL: " + content + "\n" + webpage_content
 
@@ -617,6 +699,18 @@ def open_excel_file(excel_file):
 def main(excel_file=EXCEL_FILE_PATH):
     # Set up signal handler for SIGINT
     signal.signal(signal.SIGINT, signal_handler)
+
+    # Clear the console
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+    # Get cookie from the same directory as the script
+    cookie_path = COOKIE_PATH
+
+    if not validate_cookie(cookie_path):
+        print(f"{RED}[*] Cookie is invalid. It is recommended to update the cookie.{RESET}")
+        print("[*] To use without cookie, press 'Enter' twice to continue.")
+        save_cookie(cookie_path)
+        validate_cookie(cookie_path)
 
     try:
         while True:
