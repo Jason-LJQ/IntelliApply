@@ -4,6 +4,7 @@
 # Description: A simple script to search for job applications in an Excel file
 ############################################
 import os
+import subprocess
 import time
 import pandas as pd
 import re
@@ -26,6 +27,8 @@ GREEN = '\033[32m'
 RESET = '\033[0m'
 
 COOKIE_PATH = os.path.join(os.path.dirname(__file__), "cookie.txt")
+DOMAIN_KEYWORDS = {"https://www.linkedin.com/mypreferences/d/categories/account": ["preferred", "demographic"],
+                   "https://app.joinhandshake.com": ["explore", "people"]}
 
 client = OpenAI(api_key=OPENAI_API_KEY, base_url=BASE_URL)
 
@@ -395,29 +398,72 @@ def process_webpage_content(content):
     """
 
     try:
-        response = client.chat.completions.create(
+        response = client.beta.chat.completions.parse(
             model=MODEL,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": content}
             ],
-            temperature=0.1
+            temperature=0,
+            response_format=JobInfo
         )
 
         print(response)
 
-        # Parse the response
-        result = response.choices[0].message.content
-        result = result.replace("```json", "").replace("```", "").replace("\n", "")
-        result = json.loads(result)
-        return result
+        # Parse the response and convert Job_Title to Job Title
+        result = response.choices[0].message.parsed
+        return {
+            "isValid": result.isValid,
+            "Company": result.Company,
+            "Location": result.Location,
+            "Job Title": result.Job_Title,
+            "Code": result.Code,
+            "Type": result.Type,
+            "Link": result.Link
+        }
     except Exception as e:
         print(f"Error processing content through OpenAI: {str(e)}")
         return {"isValid": False}
 
+
+def start_browser(app_path="/Applications/Microsoft Edge Beta.app/Contents/MacOS/Microsoft Edge Beta", url=list(DOMAIN_KEYWORDS.keys())):
+    """
+    Open a browser to access the specified URL.
+    If app_path is provided, it tries to open the URL using the specified application.
+    If app_path is not provided, it uses the default browser to open the URL.
+
+    :param app_path: Path to the specific browser application (e.g., /Applications/Microsoft Edge Beta.app)
+    :param url: The URL to be accessed (default is None, and no page will be opened if not provided)
+    """
+    if not url:
+        print("Error: URL is not provided, unable to open the browser.")
+        return
+
+    if isinstance(url, list):
+        success = True
+        for u in url:
+            success = start_browser(app_path, u)
+            if not success:
+                success = False
+        return success
+
+    if app_path:
+        try:
+            # Attempt to open the URL with the specified application
+            subprocess.run(["open", "-a", app_path, url], check=True)
+            print(f"{GREEN}[*] Successfully opened {url} using {app_path}{RESET}")
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"{RED}[*] Failed to open the specified application, error: {e}{RESET}")
+            return False
+        except FileNotFoundError:
+            print(f"{RED}[*] The specified application path was not found. Please check the path.{RESET}")
+            return False
+
+
 def save_cookie(cookie_path=COOKIE_PATH):
     # Prompt the user to paste the cookie in Netscape format
-    print("\nPlease paste the cookie in Netscape format (end with an empty line):")
+    print("\n[*] Please paste the cookie in Netscape format (end with an empty line):")
     netscape_cookie = []
     while True:
         line = input()  # Accept multi-line input
@@ -429,9 +475,9 @@ def save_cookie(cookie_path=COOKIE_PATH):
     try:
         with open(cookie_path, 'w') as f:
             f.write('\n'.join(netscape_cookie))
-        print(f"Cookie successfully saved to {cookie_path}")
+        print(f"{GREEN}[*] Cookie successfully saved to {cookie_path}{RESET}")
     except IOError as e:
-        print(f"[ERROR] Failed to save the cookie to {cookie_path}: {e}")
+        print(f"{RED}[*] Failed to save the cookie to {cookie_path}: {e}{RESET}")
 
 
 def validate_cookie(cookie_path=COOKIE_PATH):
@@ -445,7 +491,6 @@ def validate_cookie(cookie_path=COOKIE_PATH):
     Returns:
     - bool: True if the cookies are valid, False otherwise.
     """
-    domain_keywords = {"https://www.linkedin.com/mypreferences/d/categories/account": ["preferred", "demographic"], "https://app.joinhandshake.com": ["explore", "people"]}
 
     def parseCookieFile(cookiefile):
         """Parse a cookies.txt file and return a dictionary of key value pairs
@@ -469,19 +514,18 @@ def validate_cookie(cookie_path=COOKIE_PATH):
         return False
 
     success = True
-    for url, keywords in domain_keywords.items():
+    for url, keywords in DOMAIN_KEYWORDS.items():
         try:
             response = requests.get(url, cookies=cookies, timeout=3)
             if response.status_code == 200 and all(keyword in response.text.lower() for keyword in keywords):
                 print(f"{GREEN}[*] {url} LOGGED IN.{RESET}")
-                success = True
             else:
                 print(f"{RED}[*] {url} NOT LOGGED IN.{RESET}")
                 success = False
 
         except requests.RequestException as e:
-            print(f"An error occurred: {e}")
-            return False
+            print(f"{RED}[*] {url} ERROR: {e}{RESET}")
+            success = False
 
     return success
 
@@ -506,6 +550,8 @@ def fetch_webpage_content(url, cookie_path=COOKIE_PATH):
 
         response = requests.get(url, headers=headers, cookies=cookies, timeout=8)
         response.raise_for_status()
+
+        return response.text
 
         # Parse HTML content
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -564,7 +610,7 @@ def handle_webpage_content(content, excel_file):
     content = content.strip()
     if content.startswith('view-source:'):
         content = content[11:]  # Remove 'view-source:' prefix
-    
+
     # Check if content is a URL
     if content.startswith(('http://', 'https://')):
         print("\n[*] Fetching content from URL...")
@@ -706,18 +752,16 @@ def main(excel_file=EXCEL_FILE_PATH):
     # Get cookie from the same directory as the script
     cookie_path = COOKIE_PATH
 
+    print(f"[*] Validating cookie...")
     if not validate_cookie(cookie_path):
         print(f"{RED}[*] Cookie is invalid. It is recommended to update the cookie.{RESET}")
-        print("[*] To use without cookie, press 'Enter' twice to continue.")
-        save_cookie(cookie_path)
-        validate_cookie(cookie_path)
 
     try:
         while True:
             print("\n" + "-" * 100)
             print(
                 "[*] Enter search keyword, paste Markdown table, URL, webpage content (starting with '<' or '```'), "
-                "\n'delete' to delete last row "
+                "\n'delete' to delete last row, 'cookie' to update cookie, "
                 "(or 'exit' to quit):")
             user_input_lines = []
             line_count = 0
@@ -773,6 +817,16 @@ def main(excel_file=EXCEL_FILE_PATH):
                 except KeyboardInterrupt:
                     print('\n[*] Deletion cancelled. Send SIGINT again to exit.')
 
+                continue
+
+            if user_input.strip().lower() == 'cookie':
+                if not validate_cookie(cookie_path):
+                    print(f"{RED}[*] Cookie is invalid. Starting cookie update.{RESET}")
+                    start_browser()
+                    save_cookie(cookie_path)
+                    validate_cookie(cookie_path)
+                else:
+                    print(f"{GREEN}[*] Cookie is valid.{RESET}")
                 continue
 
             if not user_input:

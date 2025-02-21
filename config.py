@@ -1,3 +1,5 @@
+from pydantic import BaseModel
+
 REQUIRED_FIELDS = ["Company", "Location", "Job Title"]
 ALL_FIELDS = REQUIRED_FIELDS + ["Code", "Type", "Link", "Applied Date"]
 
@@ -22,12 +24,25 @@ Return the information in JSON format with the following structure:
     "isValid": boolean,
     "Company": string,
     "Location": string,
-    "Job Title": string,
+    "Job_Title": string,
     "Code": string,
     "Type": string,
     "Link": string
 }
 
 Set isValid to false if any of the required fields (Company, Location, Job Title) cannot be found. For optional fields, return empty string if not found.
-Please return the JSON in raw text format in a single line without any additional formatting. DO NOT add ```json or ``` or line breaks to the output.
+Please return the JSON in raw text format in a single line. DO NOT add any additional formatting. DO NOT add ```json or ``` or line breaks to the output.
 """
+
+
+class JobInfo(BaseModel):
+    isValid: bool
+    Company: str
+    Location: str
+    Job_Title: str
+    Code: str = ""
+    Type: str = ""
+    Link: str = ""
+
+    def __str__(self):
+        return f"isValid: {self.isValid}, Company: {self.Company}, Location: {self.Location}, Job Title: {self.Job_Title}, Code: {self.Code}, Type: {self.Type}, Link: {self.Link}"
