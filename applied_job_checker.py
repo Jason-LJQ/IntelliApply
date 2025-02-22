@@ -720,6 +720,42 @@ def is_markdown_table(input_string):
     return True
 
 
+def summary(excel_file):
+    """
+    Print a summary of job applications including:
+    - Total number of applications
+    - Number of rejections
+    - Rejection percentage
+    """
+    try:
+        workbook = load_workbook(filename=excel_file)
+        sheet = workbook.active
+        
+        # Get total number of applications (excluding header row)
+        total_applications = sheet.max_row - 1
+        
+        # Count rejections by checking cell fill color
+        rejections = 0
+        for row in range(2, sheet.max_row + 1):  # Start from row 2 to skip header
+            result = get_result_status(workbook, row)
+            if result.strip():  # If result has an 'x' mark
+                rejections += 1
+        
+        # Calculate rejection percentage
+        rejection_percentage = (rejections / total_applications * 100) if total_applications > 0 else 0
+        
+        # Print summary with color formatting
+        print(f"\n{GREEN}[*] Application Summary:{RESET}")
+        print(f"Total Applications: {total_applications}")
+        print(f"{RED}Rejections: {rejections}{RESET}")
+        print(f"Rejection Rate: {rejection_percentage:.1f}%")
+        
+        workbook.close()
+        
+    except Exception as e:
+        print(f"{RED}[*] Error generating summary: {str(e)}{RESET}")
+
+
 def open_excel_file(excel_file):
     """
     Opens the Excel file using the default application based on the operating system.
@@ -761,7 +797,7 @@ def main(excel_file=EXCEL_FILE_PATH):
             print("\n" + "-" * 100)
             print(
                 "[*] Enter search keyword, paste Markdown table, URL, webpage content (starting with '<' or '```'), "
-                "\n'delete' to delete last row, 'cookie' to update cookie, "
+                "\n'delete' to delete last row, 'cookie' to update cookie, 'summary' to view statistics, "
                 "(or 'exit' to quit):")
             user_input_lines = []
             line_count = 0
@@ -806,6 +842,10 @@ def main(excel_file=EXCEL_FILE_PATH):
             if user_input.strip().lower() == 'exit':
                 print("[*] Exiting ...")
                 break
+
+            if user_input.strip().lower() == 'summary':
+                summary(excel_file)
+                continue
 
             if user_input.strip().lower().startswith('open'):
                 open_excel_file(excel_file)
