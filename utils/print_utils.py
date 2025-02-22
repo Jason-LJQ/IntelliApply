@@ -1,4 +1,4 @@
-from string_utils import format_string
+from utils.string_utils import format_string
 
 # Color constants
 COLOR = {"RED": '\033[31m', "GREEN": '\033[32m', "RESET": '\033[0m'}
@@ -82,7 +82,7 @@ def print_results(results):
             ))
 
 
-def print_(text, color=None):
+def print_(text="", color=None):
     """
     Print text with optional color and [*] prefix.
     If text starts with \n, print newlines first.

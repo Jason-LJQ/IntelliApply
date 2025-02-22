@@ -7,6 +7,3 @@ Please replace the placeholder values with your actual credentials.
 OPENAI_API_KEY = "AIxxxxxx_YGXlZBVceXfxxxnNWofOMU-xxxxx"
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 MODEL = "gemini-2.0-flash-exp"
-
-# Excel file path configuration
-EXCEL_FILE_PATH = "Absolute-Path-To-Your-Excel-File.xlsx"

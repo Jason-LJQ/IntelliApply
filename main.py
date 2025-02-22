@@ -9,13 +9,15 @@ import time
 import signal
 import sys
 
-from string_utils import is_markdown_table, parse_markdown_table
-from excel_util import summary, open_excel_file, delete_last_row, append_data_to_excel, search_applications
-from print_utils import print_, print_results
-from web_utils import validate_cookie, handle_webpage_content, start_browser, save_cookie
+from utils.string_utils import is_markdown_table, parse_markdown_table
+from utils.excel_utils import summary, open_excel_file, delete_last_row, append_data_to_excel, search_applications
+from utils.print_utils import print_, print_results
+from utils.web_utils import save_cookie, validate_cookie, handle_webpage_content, start_browser, add_cookie
 
 
 def signal_handler(sig, frame):
+    print_("\nSaving cookie ...")
+    save_cookie()
     print_('\nExiting ...', "RED")
     sys.exit(0)
 
@@ -131,7 +133,7 @@ def main():
                 if not validate_cookie():
                     print_("Cookie is invalid. Starting cookie update.", "RED")
                     start_browser()
-                    save_cookie()
+                    add_cookie()
                     validate_cookie()
                 else:
                     print_("Cookie is valid.", "GREEN")
@@ -161,8 +163,7 @@ def main():
                     print_("No matching records found.", "RED")
 
     except KeyboardInterrupt:
-        print_('\nExiting ...', "RED")
-        sys.exit(0)
+        signal_handler(signal.SIGINT, None)
 
 
 if __name__ == "__main__":

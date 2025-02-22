@@ -1,16 +1,55 @@
 import re
 import subprocess
-from openai import OpenAI
+import pickle
+from openai import OpenAI, max_retries
 import requests
 from bs4 import BeautifulSoup
 
-from config import DOMAIN_KEYWORDS, COOKIE_PATH, EXCEL_FILE_PATH
-from excel_util import check_duplicate_entry, append_data_to_excel
-from prompt import SYSTEM_PROMPT, JobInfo, REQUIRED_FIELDS
-from credential import OPENAI_API_KEY, BASE_URL, MODEL
-from print_utils import print_
+from config.config import DOMAIN_KEYWORDS, COOKIE_PATH, EXCEL_FILE_PATH
+from config.prompt import SYSTEM_PROMPT, JobInfo, REQUIRED_FIELDS
+from utils.excel_utils import check_duplicate_entry, append_data_to_excel
+from config.credential import OPENAI_API_KEY, BASE_URL, MODEL
+from utils.print_utils import print_
+
+# Add User-Agent header to mimic a browser request
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
+}
 
 client = OpenAI(api_key=OPENAI_API_KEY, base_url=BASE_URL)
+session = requests.session()
+
+
+def save_cookie(cookie_path=COOKIE_PATH):
+    """Save current session cookies to a pickle file."""
+    try:
+        with open(cookie_path, 'wb') as f:
+            pickle.dump(session.cookies, f)
+        print_(f"Cookie successfully saved to {cookie_path}", "GREEN")
+        return True
+    except Exception as e:
+        print_(f"Failed to save cookie: {e}", "RED")
+        return False
+
+
+def load_cookies_to_session(cookie_path=COOKIE_PATH):
+    """Load cookies from pickle file into the session."""
+    try:
+        with open(cookie_path, 'rb') as f:
+            session.cookies.update(pickle.load(f))
+            print_("Loaded cookies from pickle file", "GREEN")
+            return True
+    except FileNotFoundError:
+        print_(f"Cookie file not found at path: {cookie_path}", "RED")
+        return False
+    except Exception as e:
+        print_(f"Failed to load cookies: {e}", "RED")
+        return False
+
+
+session.max_redirects = 5
+session.headers.update(HEADERS)
+load_cookies_to_session()
 
 
 def process_webpage_content(content):
@@ -83,7 +122,7 @@ def start_browser(app_path="/Applications/Microsoft Edge Beta.app/Contents/MacOS
             return False
 
 
-def save_cookie(cookie_path=COOKIE_PATH):
+def add_cookie(cookie_path=COOKIE_PATH):
     # Prompt the user to paste the cookie in Netscape format
     print("\n[*] Please paste the cookie in Netscape format (end with an empty line):")
     netscape_cookie = []
@@ -93,52 +132,38 @@ def save_cookie(cookie_path=COOKIE_PATH):
             break
         netscape_cookie.append(line)
 
-    # Write the pasted cookie to the file
     try:
-        with open(cookie_path, 'w') as f:
-            f.write('\n'.join(netscape_cookie))
-        print_(f"Cookie successfully saved to {cookie_path}", "GREEN")
-    except IOError as e:
-        print_(f"Failed to save the cookie to {cookie_path}: {e}", "RED")
+        # Parse Netscape format cookies
+        cookies = {}
+        for line in netscape_cookie:
+            if not re.match(r'^\#', line):
+                lineFields = line.strip().split('\t')
+                cookies[lineFields[5]] = lineFields[6]
+
+        # Update session cookies
+        session.cookies.update(cookies)
+
+        # Save to pickle file
+        if save_cookie():
+            return True
+        return False
+    except Exception as e:
+        print_(f"Failed to process cookie: {e}", "RED")
+        return False
 
 
-def validate_cookie(cookie_path=COOKIE_PATH):
+def validate_cookie():
     """
-    Validate the cookies in the specified cookie file with the provided domain.
-
-    Parameters:
-    - domain (str): The base domain of the target server.
-    - cookie_path (str): Path to the cookie file in Netscape format.
+    Validate the cookies in the pickle file with the provided domain.
 
     Returns:
     - bool: True if the cookies are valid, False otherwise.
     """
 
-    def parseCookieFile(cookiefile):
-        """Parse a cookies.txt file and return a dictionary of key value pairs
-        compatible with requests."""
-
-        cookies = {}
-        with open(cookiefile, 'r') as fp:
-            for line in fp:
-                if not re.match(r'^\#', line):
-                    lineFields = line.strip().split('\t')
-                    cookies[lineFields[5]] = lineFields[6]
-        return cookies
-
-    try:
-        cookies = parseCookieFile(cookie_path)
-    except FileNotFoundError:
-        print_(f"Cookie file not found at path: {cookie_path}", "RED")
-        return False
-    except Exception as e:
-        print_(f"Failed to load cookies: {e}", "RED")
-        return False
-
     success = True
     for url, keywords in DOMAIN_KEYWORDS.items():
         try:
-            response = requests.get(url, cookies=cookies, timeout=3)
+            response = session.get(url, timeout=3)
             if response.status_code == 200 and all(keyword in response.text.lower() for keyword in keywords):
                 print_(f"{url} LOGGED IN.", "GREEN")
             else:
@@ -152,44 +177,32 @@ def validate_cookie(cookie_path=COOKIE_PATH):
     return success
 
 
-def fetch_webpage_content(url, cookie_path=COOKIE_PATH):
+def fetch_webpage_content(url, cookie_path=COOKIE_PATH, parse_html=False):
     """
     Fetch content from a URL and extract the main text content.
     """
     try:
-        # Add User-Agent header to mimic a browser request
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
-        }
-
-        # Parse cookies from the cookie file
-        cookies = {}
-        with open(cookie_path, 'r') as fp:
-            for line in fp:
-                if not re.match(r'^\#', line):
-                    lineFields = line.strip().split('\t')
-                    cookies[lineFields[5]] = lineFields[6]
-
-        response = requests.get(url, headers=headers, cookies=cookies, timeout=8)
+        response = session.get(url, timeout=8)
         response.raise_for_status()
 
-        return response.text
+        if parse_html:
+            # Parse HTML content
+            soup = BeautifulSoup(response.text, 'html.parser')
 
-        # Parse HTML content
-        soup = BeautifulSoup(response.text, 'html.parser')
+            # Remove script and style elements
+            for script in soup(["script", "style"]):
+                script.decompose()
 
-        # Remove script and style elements
-        for script in soup(["script", "style"]):
-            script.decompose()
+            # Get text content
+            text = soup.get_text(separator='\n')
 
-        # Get text content
-        text = soup.get_text(separator='\n')
+            # Clean up text
+            lines = [line.strip() for line in text.split('\n') if line.strip()]
+            cleaned_text = '\n'.join(lines)
 
-        # Clean up text
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-        cleaned_text = '\n'.join(lines)
-
-        return cleaned_text
+            return cleaned_text
+        else:
+            return response.text
     except Exception as e:
         print_(f"Error fetching webpage: {str(e)}", "RED")
         return None

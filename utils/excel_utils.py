@@ -1,9 +1,9 @@
 from openpyxl import load_workbook
 import pandas as pd
-from print_utils import print_
-from string_utils import is_company_match
+from utils.print_utils import print_
+from utils.string_utils import is_company_match
 
-from config import EXCEL_FILE_PATH
+from config.config import EXCEL_FILE_PATH
 
 
 def get_result_status(workbook, row_index):
@@ -136,7 +136,7 @@ def append_data_to_excel(excel_file=EXCEL_FILE_PATH, data=[]):
         headers = {cell.value: cell.column for cell in sheet[1]}
 
         # List of all possible columns
-        from config import ALL_FIELDS
+        from config.prompt import ALL_FIELDS
         all_columns = ALL_FIELDS
 
         # Add any missing columns
