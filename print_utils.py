@@ -4,7 +4,7 @@ from string_utils import format_string
 COLOR = {"RED": '\033[31m', "GREEN": '\033[32m', "RESET": '\033[0m'}
 
 
-def print_results(results, excel_file):
+def print_results(results):
     """
     Prints the search results, including the 'Result' column with 'x' for colored cells.
     """
@@ -98,4 +98,3 @@ def print_(text, color=None):
         print(f"[*] {text}")
     else:
         print("{}[*] {}{}".format(COLOR[color.upper()], text, COLOR["RESET"]))
-

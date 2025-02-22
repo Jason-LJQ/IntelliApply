@@ -4,7 +4,7 @@ from openai import OpenAI
 import requests
 from bs4 import BeautifulSoup
 
-from config import DOMAIN_KEYWORDS, COOKIE_PATH
+from config import DOMAIN_KEYWORDS, COOKIE_PATH, EXCEL_FILE_PATH
 from excel_util import check_duplicate_entry, append_data_to_excel
 from prompt import SYSTEM_PROMPT, JobInfo, REQUIRED_FIELDS
 from credential import OPENAI_API_KEY, BASE_URL, MODEL
@@ -195,7 +195,7 @@ def fetch_webpage_content(url, cookie_path=COOKIE_PATH):
         return None
 
 
-def handle_webpage_content(content, excel_file):
+def handle_webpage_content(content, excel_file=EXCEL_FILE_PATH):
     """
     Handle webpage content: process it and add to Excel if valid
     """

@@ -163,4 +163,4 @@ cython_debug/
 .idea/
 
 credential.py
-
+cookie.txt

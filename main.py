@@ -3,17 +3,16 @@
 # Date: 2024-12-22
 # Description: A simple script to search for job applications in an Excel file
 ############################################
+
 import os
 import time
 import signal
 import sys
 
-from prompt import *
-from string_utils import *
-from excel_util import *
-from credential import *
+from string_utils import is_markdown_table, parse_markdown_table
+from excel_util import summary, open_excel_file, delete_last_row, append_data_to_excel, search_applications
 from print_utils import print_, print_results
-from web_utils import *
+from web_utils import validate_cookie, handle_webpage_content, start_browser, save_cookie
 
 
 def signal_handler(sig, frame):
@@ -50,18 +49,15 @@ def detect_ending(min_threshold=0.05, max_threshold=0.5):
         return '', True
 
 
-def main(excel_file=EXCEL_FILE_PATH):
+def main():
     # Set up signal handler for SIGINT
     signal.signal(signal.SIGINT, signal_handler)
 
     # Clear the console
     os.system('cls' if os.name == 'nt' else 'clear')
 
-    # Get cookie from the same directory as the script
-    cookie_path = COOKIE_PATH
-
     print_("Validating cookie...")
-    if not validate_cookie(cookie_path):
+    if not validate_cookie():
         print_("Cookie is invalid. It is recommended to update the cookie.", "RED")
 
     try:
@@ -106,7 +102,7 @@ def main(excel_file=EXCEL_FILE_PATH):
                 print("|" + "-" * 99)
                 print_("Webpage content detected. Processing ...")
                 content = '\n'.join(user_input_lines)
-                handle_webpage_content(content, excel_file)
+                handle_webpage_content(content)
                 continue
 
             user_input = '\n'.join(user_input_lines).strip()
@@ -116,27 +112,27 @@ def main(excel_file=EXCEL_FILE_PATH):
                 break
 
             if user_input.strip().lower() == 'summary':
-                summary(excel_file)
+                summary()
                 continue
 
             if user_input.strip().lower().startswith('open'):
-                open_excel_file(excel_file)
+                open_excel_file()
                 continue
 
             if user_input.strip().lower() == 'delete':
                 try:
-                    delete_last_row(excel_file)
+                    delete_last_row()
                 except KeyboardInterrupt:
                     print_('\nDeletion cancelled. Send SIGINT again to exit.')
 
                 continue
 
             if user_input.strip().lower() == 'cookie':
-                if not validate_cookie(cookie_path):
+                if not validate_cookie():
                     print_("Cookie is invalid. Starting cookie update.", "RED")
                     start_browser()
-                    save_cookie(cookie_path)
-                    validate_cookie(cookie_path)
+                    save_cookie()
+                    validate_cookie()
                 else:
                     print_("Cookie is valid.", "GREEN")
                 continue
@@ -154,13 +150,13 @@ def main(excel_file=EXCEL_FILE_PATH):
                     continue
 
                 # Append the data to the Excel file
-                append_data_to_excel(excel_file, data)
+                append_data_to_excel(data=data)
                 print_(f"New record successfully appended to Excel file.", "GREEN")
 
             else:
-                results = search_applications(excel_file, user_input)
+                results = search_applications(search_term=user_input)
                 if results:
-                    print_results(results, excel_file)
+                    print_results(results)
                 else:
                     print_("No matching records found.", "RED")
 

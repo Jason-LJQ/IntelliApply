@@ -3,6 +3,8 @@ import pandas as pd
 from print_utils import print_
 from string_utils import is_company_match
 
+from config import EXCEL_FILE_PATH
+
 
 def get_result_status(workbook, row_index):
     """
@@ -29,7 +31,7 @@ def get_result_status(workbook, row_index):
         return ''
 
 
-def delete_last_row(excel_file):
+def delete_last_row(excel_file=EXCEL_FILE_PATH):
     """
     Deletes the last row in the Excel file after user confirmation.
     """
@@ -65,7 +67,7 @@ def delete_last_row(excel_file):
         print_(f"Error deleting last row: {str(e)}", "RED")
 
 
-def search_applications(excel_file, search_term):
+def search_applications(excel_file=EXCEL_FILE_PATH, search_term=""):
     """
     Search for both company and job title matches
     """
@@ -116,7 +118,7 @@ def search_applications(excel_file, search_term):
         return []
 
 
-def append_data_to_excel(excel_file, data):
+def append_data_to_excel(excel_file=EXCEL_FILE_PATH, data=[]):
     """
     Appends a list of dictionaries to the end of the Excel file using openpyxl.
     Automatically determines the column letters for all fields.
@@ -191,7 +193,7 @@ def check_duplicate_entry(excel_file, new_data):
         return None
 
 
-def summary(excel_file):
+def summary(excel_file=EXCEL_FILE_PATH):
     """
     Print a summary of job applications including:
     - Total number of applications
@@ -227,7 +229,7 @@ def summary(excel_file):
         print_(f"Error generating summary: {str(e)}", "RED")
 
 
-def open_excel_file(excel_file):
+def open_excel_file(excel_file=EXCEL_FILE_PATH):
     """
     Opens the Excel file using the default application based on the operating system.
     Returns True if successful, False otherwise.
