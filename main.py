@@ -66,7 +66,7 @@ def main():
         while True:
             print("\n" + "-" * 100)
             print_(
-                "Enter search keyword, paste Markdown table, URL, webpage content (starting with '<' or '```'), "
+                "Enter search keyword, paste Markdown table, URL, webpage content (wrapped with '< >' or '```'), "
                 "\n'delete' to delete last row, 'cookie' to update cookie, 'summary' to view statistics, "
                 "(or 'exit' to quit):")
             user_input_lines = []

@@ -118,12 +118,14 @@ def search_applications(excel_file=EXCEL_FILE_PATH, search_term=""):
         return []
 
 
-def append_data_to_excel(excel_file=EXCEL_FILE_PATH, data=[]):
+def append_data_to_excel(excel_file=EXCEL_FILE_PATH, data=None):
     """
     Appends a list of dictionaries to the end of the Excel file using openpyxl.
     Automatically determines the column letters for all fields.
     Adds missing columns if they don't exist.
     """
+    if data is None:
+        return
     try:
         # Load the existing Excel file
         workbook = load_workbook(filename=excel_file)
@@ -164,11 +166,13 @@ def append_data_to_excel(excel_file=EXCEL_FILE_PATH, data=[]):
         print_(f"Error appending data to Excel: {str(e)}")
 
 
-def check_duplicate_entry(excel_file, new_data):
+def check_duplicate_entry(excel_file=EXCEL_FILE_PATH, new_data=None):
     """
     Check if the exact same job entry already exists in the Excel file.
     Returns True if a duplicate is found, False otherwise.
     """
+    if new_data is None:
+        return None
     try:
         df = pd.read_excel(excel_file)
 

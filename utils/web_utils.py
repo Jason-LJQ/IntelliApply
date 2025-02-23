@@ -1,20 +1,16 @@
 import re
 import subprocess
 import pickle
-from openai import OpenAI, max_retries
+from openai import OpenAI
 import requests
 from bs4 import BeautifulSoup
 
-from config.config import DOMAIN_KEYWORDS, COOKIE_PATH, EXCEL_FILE_PATH
+from config.config import DOMAIN_KEYWORDS, COOKIE_PATH, HEADERS
 from config.prompt import SYSTEM_PROMPT, JobInfo, REQUIRED_FIELDS
 from utils.excel_utils import check_duplicate_entry, append_data_to_excel
 from config.credential import OPENAI_API_KEY, BASE_URL, MODEL
 from utils.print_utils import print_
 
-# Add User-Agent header to mimic a browser request
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
-}
 
 client = OpenAI(api_key=OPENAI_API_KEY, base_url=BASE_URL)
 session = requests.session()
@@ -67,8 +63,6 @@ def process_webpage_content(content):
             temperature=0,
             response_format=JobInfo
         )
-
-        print(response)
 
         # Parse the response and convert Job_Title to Job Title
         result = response.choices[0].message.parsed
@@ -208,7 +202,7 @@ def fetch_webpage_content(url, cookie_path=COOKIE_PATH, parse_html=False):
         return None
 
 
-def handle_webpage_content(content, excel_file=EXCEL_FILE_PATH):
+def handle_webpage_content(content):
     """
     Handle webpage content: process it and add to Excel if valid
     """
@@ -255,17 +249,20 @@ def handle_webpage_content(content, excel_file=EXCEL_FILE_PATH):
     }
 
     # Check for duplicates
-    duplicate_entry = check_duplicate_entry(excel_file, data)
+    duplicate_entry = check_duplicate_entry(new_data=data)
     if duplicate_entry is not None:
-        print_("Warning: This job entry already exists in the Excel file.", "RED")
-        print(f"Duplicate Entry: {duplicate_entry}")
-        confirm = input("[*] Add it anyway? (y/Y to confirm, any other key to cancel): ").lower()
-        if confirm != 'y':
+        try:
+            print_("Warning: This job entry already exists in the Excel file.", "RED")
+            print(f"Duplicate Entry: {duplicate_entry}")
+            confirm = input("[*] Add it anyway? (y/yes to confirm, any other key to cancel): ").lower()
+            if confirm.lower() != 'y' and confirm.lower() != 'yes':
+                raise KeyboardInterrupt
+        except KeyboardInterrupt:
             print_("Addition cancelled.", "RED")
             return
 
     # Add to Excel
-    append_data_to_excel(excel_file, [data])
+    append_data_to_excel(data=[data])
 
     # Display result
     print_(f"Successfully extracted and added to Excel:", "GREEN")
