@@ -53,51 +53,63 @@ def detect_ending(min_threshold=0.05, max_threshold=0.5):
 
 
 def update_result():
+    last_search_term = None
+    results = None
+
     # Enter mark mode
     while True:
         print("-" * 100)
-        print_("[*] Entering mark mode. Please enter search keyword. Enter 'exit' to exit mark mode.")
-        search_term = input("> ").strip()
+        search_term = ""
+
+        if not results:
+            print_("[*] Entering mark mode. Please enter search keyword. Enter 'exit' to exit mark mode.")
+            search_term = input("> ").strip()
+        else:
+            # Ask user to select a row to mark
+            print_(f"\n[*] Current Search: {last_search_term}.")
+            # Display results with numbers
+            print_results(results, mark_mode=True)
+            print_(f"Enter the number of the row to mark or start a new search.",
+                   "GREEN")
+            selection = input("> ").strip()
+
+            # If slesction is not a number, start a new search
+            try:
+                selection = int(selection)
+                search_term = last_search_term
+            except ValueError:
+                search_term = selection
+                last_search_term = None
+                results = None
 
         if search_term.lower() == 'exit':
-            print_("Exiting mark mode.", "GREEN")
+            print_("Search interrupted. Exiting mark mode.", "GREEN")
             break
 
         if not search_term:
             print_("Search keyword cannot be empty!", "RED")
             continue
 
+        if last_search_term and results:
+            if 1 <= selection <= len(results):
+                # Get the actual Excel row index from the result
+                row_index = results[selection - 1]['row_index']
+                mark_result(row_index=row_index)
+                print_(f"Updated record:", "GREEN")
+                print_results(search_applications(index=row_index))
+                last_search_term, results = None, None
+                continue
+            else:
+                print_(f"Invalid selection. Please enter a number between 1 and {len(results)}.", "RED")
+                continue
+
         results = search_applications(search_term=search_term)
         if not results:
             print_("No matching records found.", "RED")
             continue
-
-        while True:
-            # Ask user to select a row to mark
-            print_(f"\n[*] Current Search: {search_term}.")
-            # Display results with numbers
-            print_results(results, mark_mode=True)
-
-            print_(f"Enter the number of the row to mark (or 'exit' to re-enter search keyword):", "GREEN")
-            selection = input("> ").strip()
-
-            if selection.lower() == 'exit':
-                print_("Search interrupted.", "RED")
-                break
-
-            try:
-                selection_index = int(selection)
-                if 1 <= selection_index <= len(results):
-                    # Get the actual Excel row index from the result
-                    row_index = results[selection_index - 1]['row_index']
-                    mark_result(row_index=row_index)
-                    print_(f"Updated record:", "GREEN")
-                    print_results([results[selection_index - 1]])
-                    break
-                else:
-                    print_(f"Invalid selection. Please enter a number between 1 and {len(results)}.", "RED")
-            except ValueError:
-                print_("Invalid input. Please enter a valid number.", "RED")
+        else:
+            last_search_term = search_term
+            results = results
 
 
 def main():

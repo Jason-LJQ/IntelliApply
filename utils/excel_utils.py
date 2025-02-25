@@ -67,13 +67,46 @@ def delete_last_row(excel_file=EXCEL_FILE_PATH):
         print_(f"Error deleting last row: {str(e)}", "RED")
 
 
-def search_applications(excel_file=EXCEL_FILE_PATH, search_term=""):
+def search_applications(excel_file=EXCEL_FILE_PATH, search_term="", index=-1):
     """
     Search for both company and job title matches
+    
+    Args:
+        excel_file: Path to the Excel file
+        search_term: The search term to match against company and job title
+        index: If >= 0, directly return the record at this index (1-indexed, including header row)
+        
+    Returns:
+        List of matching records
     """
     try:
         # Read Excel file fresh every time
         df = pd.read_excel(excel_file)
+        workbook = load_workbook(filename=excel_file)
+
+        def applied_date(row):
+            raw = row.get('Applied Date', '')
+            raw = '' if str(raw).strip() == 'nan' else raw
+            return raw
+        
+        # If index is provided, directly return that record
+        if index >= 2:  # Index 1 is header
+            if index - 2 < len(df):  # Convert to 0-indexed for DataFrame
+                row = df.iloc[index - 2]
+                
+                result = [{
+                    'Company': row['Company'],
+                    'Location': row['Location'],
+                    'Job Title': row['Job Title'],
+                    'Applied Date': applied_date(row),
+                    'result': get_result_status(workbook, index),
+                    'row_index': index,
+                }]
+                workbook.close()
+                return result
+            else:
+                print_(f"Index {index} is out of range.", "RED")
+                return []
 
         # Convert DataFrame columns to string type
         string_columns = ['Company', 'Job Title', 'Location']
@@ -83,12 +116,6 @@ def search_applications(excel_file=EXCEL_FILE_PATH, search_term=""):
 
         matches = []
         search_term_lower = search_term.lower().strip()
-        workbook = load_workbook(filename=excel_file)
-
-        def applied_date(row):
-            raw = row.get('Applied Date', '')
-            raw = '' if str(raw).strip() == 'nan' else raw
-            return raw
 
         for index, row in df.iterrows():
             # Check company name match
