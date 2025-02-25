@@ -10,7 +10,8 @@ import signal
 import sys
 
 from utils.string_utils import is_markdown_table, parse_markdown_table
-from utils.excel_utils import summary, open_excel_file, delete_last_row, append_data_to_excel, search_applications
+from utils.excel_utils import summary, open_excel_file, delete_last_row, append_data_to_excel, search_applications, \
+    mark_result
 from utils.print_utils import print_, print_results
 from utils.web_utils import save_cookie, validate_cookie, handle_webpage_content, start_browser, add_cookie
 
@@ -51,6 +52,54 @@ def detect_ending(min_threshold=0.05, max_threshold=0.5):
         return '', True
 
 
+def update_result():
+    # Enter mark mode
+    while True:
+        print("-" * 100)
+        print_("[*] Entering mark mode. Please enter search keyword. Enter 'exit' to exit mark mode.")
+        search_term = input("> ").strip()
+
+        if search_term.lower() == 'exit':
+            print_("Exiting mark mode.", "GREEN")
+            break
+
+        if not search_term:
+            print_("Search keyword cannot be empty!", "RED")
+            continue
+
+        results = search_applications(search_term=search_term)
+        if not results:
+            print_("No matching records found.", "RED")
+            continue
+
+        while True:
+            # Ask user to select a row to mark
+            print_(f"\n[*] Current Search: {search_term}.")
+            # Display results with numbers
+            print_results(results, mark_mode=True)
+
+            print_(f"Enter the number of the row to mark (or 'exit' to re-enter search keyword):", "GREEN")
+            selection = input("> ").strip()
+
+            if selection.lower() == 'exit':
+                print_("Search interrupted.", "RED")
+                break
+
+            try:
+                selection_index = int(selection)
+                if 1 <= selection_index <= len(results):
+                    # Get the actual Excel row index from the result
+                    row_index = results[selection_index - 1]['row_index']
+                    mark_result(row_index=row_index)
+                    print_(f"Updated record:", "GREEN")
+                    print_results([results[selection_index - 1]])
+                    break
+                else:
+                    print_(f"Invalid selection. Please enter a number between 1 and {len(results)}.", "RED")
+            except ValueError:
+                print_("Invalid input. Please enter a valid number.", "RED")
+
+
 def main():
     # Set up signal handler for SIGINT
     signal.signal(signal.SIGINT, signal_handler)
@@ -67,7 +116,7 @@ def main():
             print("\n" + "-" * 100)
             print_(
                 "Enter search keyword, paste Markdown table, URL, webpage content (wrapped with '< >' or '```'), "
-                "\n'delete' to delete last row, 'cookie' to update cookie, 'summary' to view statistics, "
+                "\n'delete' to delete last row, 'cookie' to update cookie, 'summary' to view statistics, 'result' to enter mark mode, "
                 "(or 'exit' to quit):")
             user_input_lines = []
             line_count = 0
@@ -137,6 +186,10 @@ def main():
                     validate_cookie()
                 else:
                     print_("Cookie is valid.", "GREEN")
+                continue
+
+            if user_input.strip().lower() == 'result' or user_input.strip().lower() == 'mark':
+                update_result()
                 continue
 
             if not user_input:

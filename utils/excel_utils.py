@@ -1,6 +1,6 @@
 from openpyxl import load_workbook
 import pandas as pd
-from utils.print_utils import print_
+from utils.print_utils import print_, print_results
 from utils.string_utils import is_company_match
 
 from config.config import EXCEL_FILE_PATH
@@ -99,6 +99,7 @@ def search_applications(excel_file=EXCEL_FILE_PATH, search_term=""):
                     'Job Title': row['Job Title'],
                     'Applied Date': applied_date(row),
                     'result': get_result_status(workbook, index + 2),
+                    'row_index': index + 2,  # Store the actual Excel row index (1-indexed, with header)
                 })
             # Check exact job title match
             elif search_term_lower in row['Job Title'].lower():
@@ -108,6 +109,7 @@ def search_applications(excel_file=EXCEL_FILE_PATH, search_term=""):
                     'Job Title': row['Job Title'],
                     'Applied Date': applied_date(row),
                     'result': get_result_status(workbook, index + 2),
+                    'row_index': index + 2,  # Store the actual Excel row index (1-indexed, with header)
                 })
 
         workbook.close()
@@ -248,8 +250,63 @@ def open_excel_file(excel_file=EXCEL_FILE_PATH):
             subprocess.run(['start', '', excel_file], shell=True)
         else:  # Linux and other OS
             subprocess.run(['xdg-open', excel_file])
-        print_("Opening Excel file...", "GREEN")
-        return True
     except Exception as e:
-        print_(f"Error opening file: {str(e)}", "RED")
+        print_(f"Error opening Excel file: {str(e)}", "RED")
+        return False
+    return True
+
+
+def mark_result(excel_file=EXCEL_FILE_PATH, row_index=None):
+    """
+    Marks the 'Result' cell at the given row index with a red fill color.
+    Also creates a backup of the file in /tmp directory.
+    
+    Args:
+        excel_file: Path to the Excel file
+        row_index: The row index to mark (1-indexed, including header row)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    import shutil
+    import os
+    from datetime import datetime
+    from openpyxl.styles import PatternFill
+
+    if row_index is None or row_index < 2:  # Row 1 is header
+        print_("Invalid row index.", "RED")
+        return False
+
+    try:
+        # Create backup in /tmp directory
+        backup_filename = f"/tmp/job_application_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        shutil.copy2(excel_file, backup_filename)
+        print_(f"Backup created at {backup_filename}", "GREEN")
+
+        # Load the workbook
+        workbook = load_workbook(filename=excel_file)
+        sheet = workbook.active
+
+        # Find the Result column
+        headers = {cell.value: cell.column for cell in sheet[1]}
+
+        if 'Result' not in headers:
+            print_("'Result' column not found in the Excel file.", "RED")
+            workbook.close()
+            return False
+
+        # Mark the cell with red fill
+        result_cell = sheet.cell(row=row_index, column=headers['Result'])
+        red_fill = PatternFill(start_color="FFFF0000", end_color="FFFF0000", fill_type="solid")
+        result_cell.fill = red_fill
+
+        # Save the workbook
+        workbook.save(filename=excel_file)
+        workbook.close()
+
+        print_(f"Row {row_index - 1} marked as rejected.", "GREEN")
+        return True
+
+    except Exception as e:
+        print_(f"Error marking result: {str(e)}", "RED")
         return False
