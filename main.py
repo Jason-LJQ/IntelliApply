@@ -10,7 +10,7 @@ import signal
 import sys
 
 from utils.string_utils import is_markdown_table, parse_markdown_table
-from utils.excel_utils import summary, open_excel_file, delete_last_row, append_data_to_excel, search_applications, \
+from utils.excel_utils import summary, open_excel_file, show_last_row, append_data_to_excel, search_applications, \
     mark_result
 from utils.print_utils import print_, print_results
 from utils.web_utils import save_cookie, validate_cookie, handle_webpage_content, start_browser, add_cookie
@@ -184,10 +184,13 @@ def main():
 
             if user_input.strip().lower() == 'delete':
                 try:
-                    delete_last_row()
+                    show_last_row(delete=True)
                 except KeyboardInterrupt:
                     print_('\nDeletion cancelled. Send SIGINT again to exit.')
+                continue
 
+            if user_input.strip().lower() == 'last':
+                show_last_row(delete=False)
                 continue
 
             if user_input.strip().lower() == 'cookie':

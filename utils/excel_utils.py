@@ -31,9 +31,9 @@ def get_result_status(workbook, row_index):
         return ''
 
 
-def delete_last_row(excel_file=EXCEL_FILE_PATH):
+def show_last_row(excel_file=EXCEL_FILE_PATH, delete=False):
     """
-    Deletes the last row in the Excel file after user confirmation.
+    Show last row's data. If delete is True, delete the last row after user confirmation.
     """
     try:
         workbook = load_workbook(filename=excel_file)
@@ -41,7 +41,7 @@ def delete_last_row(excel_file=EXCEL_FILE_PATH):
         last_row = sheet.max_row
 
         if last_row <= 1:
-            print_("No data to delete.", "RED")
+            print_("No data to show.", "RED")
             workbook.close()
             return
 
@@ -52,19 +52,20 @@ def delete_last_row(excel_file=EXCEL_FILE_PATH):
         for header, value in zip(headers, last_row_data):
             print(f"{header}: {value}")
 
-        # Ask for user confirmation
-        confirm = input("[*] Delete this row? (y/Y to confirm, any other key to cancel): ").lower()
-        if confirm == 'y':
-            sheet.delete_rows(last_row)
-            workbook.save(filename=excel_file)
-            print_(f"Last row deleted successfully.", "GREEN")
-        else:
-            print_(f"Deletion cancelled.", "RED")
+        if delete:
+            # Ask for user confirmation
+            confirm = input("[*] Delete this row? (y/Y to confirm, any other key to cancel): ").lower()
+            if confirm == 'y':
+                sheet.delete_rows(last_row)
+                workbook.save(filename=excel_file)
+                print_(f"Last row deleted successfully.", "GREEN")
+            else:
+                print_(f"Deletion cancelled.", "RED")
 
         workbook.close()
 
     except Exception as e:
-        print_(f"Error deleting last row: {str(e)}", "RED")
+        print_(f"Error processing last row: \n{str(e)}", "RED")
 
 
 def search_applications(excel_file=EXCEL_FILE_PATH, search_term="", index=-1):
