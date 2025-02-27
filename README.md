@@ -6,6 +6,8 @@ An intelligent job application tracking system with LLM-powered information extr
 
 IntelliApply is a smart command-line tool designed to streamline the job application process. It automatically extracts key information from job postings, tracks application status, and provides powerful search capabilities—all enhanced by Large Language Models.
 
+Stars are weclomed! ^_^
+
 ## Features
 
 - **LLM-Powered Information Extraction**: Automatically extract structured job information from various sources using Google Gemini's AI capabilities
@@ -63,12 +65,10 @@ python main.py
 
 - **Add job from web content**: Paste content wrapped with `< >` or triple backticks
   ```
-  > ```
-    Job Title: Software Engineer
+  > < Job Title: Software Engineer
     Company: Example Inc.
     Location: Remote
-    ...
-    ```
+    >
   ```
 
 - **Add job from Markdown table**: Paste a properly-formatted Markdown table
