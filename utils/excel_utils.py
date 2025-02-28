@@ -1,9 +1,9 @@
 from openpyxl import load_workbook
 import pandas as pd
+
 from utils.print_utils import print_, print_results
 from utils.string_utils import is_company_match
-
-from config.config import EXCEL_FILE_PATH
+from config.credential import EXCEL_FILE_PATH
 
 
 def get_result_status(workbook, row_index):
@@ -89,12 +89,12 @@ def search_applications(excel_file=EXCEL_FILE_PATH, search_term="", index=-1):
             raw = row.get('Applied Date', '')
             raw = '' if str(raw).strip() == 'nan' else raw
             return raw
-        
+
         # If index is provided, directly return that record
         if index >= 2:  # Index 1 is header
             if index - 2 < len(df):  # Convert to 0-indexed for DataFrame
                 row = df.iloc[index - 2]
-                
+
                 result = [{
                     'Company': row['Company'],
                     'Location': row['Location'],
