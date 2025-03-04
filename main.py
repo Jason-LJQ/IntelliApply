@@ -74,17 +74,11 @@ def main():
     try:
         while True:
             print("\n" + "-" * 100)
-        
-            if last_results:
-                print_(f"[*] Current Search: {last_search_term}")
-                print_results(last_results, mark_mode=True)
-                print_("Enter a number to mark the record, or enter a new search term.")
-            else:
-                print_(
-                    "Enter search keyword, paste Markdown table, URL, webpage content (wrapped with '< >' or '```'), "
-                    "\n'delete' to delete last row, 'cookie' to update cookie, 'summary' to view statistics, "
-                    "Enter number to mark rejection "
-                    "(or 'exit' to quit):")
+            print_(
+                "Enter search keyword, paste Markdown table, URL, webpage content (wrapped with '< >' or '```'), "
+                "\nEnter a number to mark rejection, "
+                "'delete' to delete last row, 'cookie' to update cookie, 'summary' to view statistics, "
+                "(or 'exit' to quit):")
 
             user_input_lines = []
             line_count = 0
@@ -175,7 +169,6 @@ def main():
                 print_("Search keyword cannot be empty!", "RED")
                 continue
 
-            
             if last_results and user_input.strip().isdigit():
                 selection = int(user_input.strip())
                 if 1 <= selection <= len(last_results):
