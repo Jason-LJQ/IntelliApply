@@ -177,7 +177,7 @@ def main():
                     row_data = last_results[selection - 1]
                     print_(f"\nYou are about to mark the following record:", "YELLOW")
                     print_results([row_data])
-                    confirm = input("Confirm? (y/N): ").strip().lower()
+                    confirm = input(print_("Confirm? (y/N): ", color="YELLOW", return_text=True)).strip().lower()
                     if confirm == 'y':
                         row_index = row_data['row_index']
                         mark_result(row_index=row_index)

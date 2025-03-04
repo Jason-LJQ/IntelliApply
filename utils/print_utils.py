@@ -139,7 +139,7 @@ def print_results(results, mark_mode=False):
                 ))
 
 
-def print_(text="", color=None):
+def print_(text="", color=None, return_text=False):
     """
     Print text with optional color and [*] prefix.
     If text starts with \n, print newlines first.
@@ -150,8 +150,15 @@ def print_(text="", color=None):
         while text.startswith('\n'):
             print()  # Print empty line
             text = text[1:]  # Remove the leading newline
+    
+    formatted_text = ""
 
     if not color or color not in COLOR:
-        print(f"[*] {text}")
+        formatted_text = f"[*] {text}"
     else:
-        print("{}[*] {}{}".format(COLOR[color.upper()], text, COLOR["RESET"]))
+        formatted_text = "{}[*] {}{}".format(COLOR[color.upper()], text, COLOR["RESET"])
+
+    if return_text:
+        return formatted_text
+    else:
+        print(formatted_text)

@@ -254,7 +254,7 @@ def handle_webpage_content(content):
         try:
             print_("Warning: This job entry already exists in the Excel file.", "RED")
             print(f"Duplicate Entry: {duplicate_entry}")
-            confirm = input("[*] Add it anyway? (y/yes to confirm, any other key to cancel): ").lower()
+            confirm = input(print_("[*] Add it anyway? (y/yes to confirm, any other key to cancel): ", color="YELLOW", return_text=True)).lower()
             if confirm.lower() != 'y' and confirm.lower() != 'yes':
                 raise KeyboardInterrupt
         except KeyboardInterrupt:

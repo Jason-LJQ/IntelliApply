@@ -45,16 +45,13 @@ def show_last_row(excel_file=EXCEL_FILE_PATH, delete=False):
             workbook.close()
             return
 
-        # Display the last row's data for confirmation
-        last_row_data = [cell.value for cell in sheet[last_row]]
-        headers = [cell.value for cell in sheet[1]]
-        print_("Last row data:")
-        for header, value in zip(headers, last_row_data):
-            print(f"{header}: {value}")
+        # Use search_applications to get the last row data
+        results = search_applications(excel_file=excel_file, index=last_row)
+        print_results(results)
 
         if delete:
             # Ask for user confirmation
-            confirm = input("[*] Delete this row? (y/Y to confirm, any other key to cancel): ").lower()
+            confirm = input(print_("Delete this row? (y/Y to confirm, any other key to cancel): ", color="YELLOW", return_text=True)).lower()
             if confirm == 'y':
                 sheet.delete_rows(last_row)
                 workbook.save(filename=excel_file)
