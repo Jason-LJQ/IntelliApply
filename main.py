@@ -52,66 +52,6 @@ def detect_ending(min_threshold=0.05, max_threshold=0.5):
         return '', True
 
 
-def update_result():
-    last_search_term = None
-    results = None
-
-    # Enter mark mode
-    while True:
-        print("-" * 100)
-        search_term = ""
-
-        if not results:
-            print_("[*] Entering mark mode. Please enter search keyword. Enter 'exit' to exit mark mode.")
-            search_term = input("> ").strip()
-        else:
-            # Ask user to select a row to mark
-            print_(f"\n[*] Current Search: {last_search_term}.")
-            # Display results with numbers
-            print_results(results, mark_mode=True)
-            print_(f"Enter the number of the row to mark or start a new search.",
-                   "GREEN")
-            selection = input("> ").strip()
-
-            # If slesction is not a number, start a new search
-            try:
-                selection = int(selection)
-                search_term = last_search_term
-            except ValueError:
-                search_term = selection
-                last_search_term = None
-                results = None
-
-        if search_term.lower() == 'exit':
-            print_("Search interrupted. Exiting mark mode.", "GREEN")
-            break
-
-        if not search_term:
-            print_("Search keyword cannot be empty!", "RED")
-            continue
-
-        if last_search_term and results:
-            if 1 <= selection <= len(results):
-                # Get the actual Excel row index from the result
-                row_index = results[selection - 1]['row_index']
-                mark_result(row_index=row_index)
-                print_(f"Updated record:", "GREEN")
-                print_results(search_applications(index=row_index))
-                last_search_term, results = None, None
-                continue
-            else:
-                print_(f"Invalid selection. Please enter a number between 1 and {len(results)}.", "RED")
-                continue
-
-        results = search_applications(search_term=search_term)
-        if not results:
-            print_("No matching records found.", "RED")
-            continue
-        else:
-            last_search_term = search_term
-            results = results
-
-
 def main():
     # Set up signal handler for SIGINT
     signal.signal(signal.SIGINT, signal_handler)
@@ -123,13 +63,24 @@ def main():
     if not validate_cookie():
         print_("Cookie is invalid. It is recommended to update the cookie.", "RED")
 
+    last_search_term = None
+    last_results = None
+
     try:
         while True:
             print("\n" + "-" * 100)
-            print_(
-                "Enter search keyword, paste Markdown table, URL, webpage content (wrapped with '< >' or '```'), "
-                "\n'delete' to delete last row, 'cookie' to update cookie, 'summary' to view statistics, 'result' to enter mark mode, "
-                "(or 'exit' to quit):")
+        
+            if last_results:
+                print_(f"[*] Current Search: {last_search_term}")
+                print_results(last_results, mark_mode=True)
+                print_("Enter a number to mark the record, or enter a new search term.")
+            else:
+                print_(
+                    "Enter search keyword, paste Markdown table, URL, webpage content (wrapped with '< >' or '```'), "
+                    "\n'delete' to delete last row, 'cookie' to update cookie, 'summary' to view statistics, "
+                    "Enter number to mark rejection "
+                    "(or 'exit' to quit):")
+
             user_input_lines = []
             line_count = 0
             is_webpage_content = False
@@ -166,6 +117,8 @@ def main():
                 print_("Webpage content detected. Processing ...")
                 content = '\n'.join(user_input_lines)
                 handle_webpage_content(content)
+                last_search_term = None
+                last_results = None
                 continue
 
             user_input = '\n'.join(user_input_lines).strip()
@@ -176,10 +129,14 @@ def main():
 
             if user_input.strip().lower() == 'summary':
                 summary()
+                last_search_term = None
+                last_results = None
                 continue
 
             if user_input.strip().lower().startswith('open'):
                 open_excel_file()
+                last_search_term = None
+                last_results = None
                 continue
 
             if user_input.strip().lower() == 'delete':
@@ -187,10 +144,14 @@ def main():
                     show_last_row(delete=True)
                 except KeyboardInterrupt:
                     print_('\nDeletion cancelled. Send SIGINT again to exit.')
+                last_search_term = None
+                last_results = None
                 continue
 
             if user_input.strip().lower() == 'last':
                 show_last_row(delete=False)
+                last_search_term = None
+                last_results = None
                 continue
 
             if user_input.strip().lower() == 'cookie':
@@ -201,15 +162,35 @@ def main():
                     validate_cookie()
                 else:
                     print_("Cookie is valid.", "GREEN")
-                continue
-
-            if user_input.strip().lower() == 'result' or user_input.strip().lower() == 'mark':
-                update_result()
+                last_search_term = None
+                last_results = None
                 continue
 
             if not user_input:
                 print_("Search keyword cannot be empty!", "RED")
                 continue
+
+            
+            if last_results and user_input.strip().isdigit():
+                selection = int(user_input.strip())
+                if 1 <= selection <= len(last_results):
+                    row_data = last_results[selection - 1]
+                    print_(f"\nYou are about to mark the following record:", "YELLOW")
+                    print_results([row_data])
+                    confirm = input("Confirm? (y/N): ").strip().lower()
+                    if confirm == 'y':
+                        row_index = row_data['row_index']
+                        mark_result(row_index=row_index)
+                        print_(f"Updated record:")
+                        print_results(search_applications(index=row_index))
+                    else:
+                        print_("Operation cancelled.", "RED")
+                    last_search_term = None
+                    last_results = None
+                    continue
+                else:
+                    print_(f"Invalid selection. Please enter a number between 1 and {len(last_results)}.", "RED")
+                    continue
 
             if is_markdown_table(user_input):
                 # Parse the Markdown table
@@ -222,13 +203,19 @@ def main():
                 # Append the data to the Excel file
                 append_data_to_excel(data=data)
                 print_(f"New record successfully appended to Excel file.", "GREEN")
+                last_search_term = None
+                last_results = None
 
             else:
                 results = search_applications(search_term=user_input)
                 if results:
-                    print_results(results)
+                    last_search_term = user_input
+                    last_results = results
+                    print_results(results, mark_mode=True)
                 else:
                     print_("No matching records found.", "RED")
+                    last_search_term = None
+                    last_results = None
 
     except KeyboardInterrupt:
         signal_handler(signal.SIGINT, None)

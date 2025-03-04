@@ -309,7 +309,7 @@ def mark_result(excel_file=EXCEL_FILE_PATH, row_index=None):
         # Create backup in /tmp directory
         backup_filename = f"/tmp/job_application_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         shutil.copy2(excel_file, backup_filename)
-        print_(f"Backup created at {backup_filename}", "GREEN")
+        print_(f"\nBackup created at {backup_filename}")
 
         # Load the workbook
         workbook = load_workbook(filename=excel_file)

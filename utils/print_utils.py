@@ -1,7 +1,7 @@
 from utils.string_utils import format_string
 
 # Color constants
-COLOR = {"RED": '\033[31m', "GREEN": '\033[32m', "RESET": '\033[0m'}
+COLOR = {"RED": '\033[31m', "GREEN": '\033[32m', "YELLOW": '\033[33m', "RESET": '\033[0m'}
 
 
 def print_results(results, mark_mode=False):
