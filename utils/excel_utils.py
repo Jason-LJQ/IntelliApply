@@ -1,9 +1,77 @@
-from openpyxl import load_workbook
+from openpyxl import load_workbook, Workbook
 import pandas as pd
+import os
+import shutil
+from datetime import datetime
 
 from utils.print_utils import print_, print_results
 from utils.string_utils import is_company_match
 from config.credential import EXCEL_FILE_PATH
+from config.prompt import ALL_FIELDS
+
+def validate_excel_file(excel_file=EXCEL_FILE_PATH):
+    """
+    Validates the Excel file:
+    1. Check if file exists, if not, ask user to create
+    2. Check if all required columns exist, if not, backup the file and create a new one
+    
+    Returns:
+        bool: True if validation passes or issues are fixed, False if validation fails
+    """
+
+    def create_new_excel():
+        wb = Workbook()
+        ws = wb.active
+        for col, field in enumerate(['Result'] + ALL_FIELDS, 1):
+            ws.cell(row=1, column=col, value=field)
+        wb.save(excel_file)
+        print_(f"Created new Excel file at {excel_file}", "GREEN")
+
+    try:
+        # Check if file exists
+        if not os.path.exists(excel_file):
+            dir_path = os.path.dirname(excel_file)
+            if not os.path.exists(dir_path):
+                os.makedirs(dir_path)
+            
+            confirm = input(print_(f"Excel file not found at {excel_file}. Create it? (y/Y to confirm): ", color="YELLOW", return_text=True)).lower()
+            if confirm == 'y':
+                # Create new Excel file with required columns
+                create_new_excel()
+                return True
+            else:
+                print_("Excel file creation cancelled.", "RED")
+                return False
+                
+        # Check if all required columns exist
+        wb = load_workbook(filename=excel_file)
+        ws = wb.active
+        existing_headers = [cell.value for cell in ws[1]]
+        missing_headers = [header for header in ['Result'] + ALL_FIELDS if header not in existing_headers]
+        wb.close()
+        
+        if missing_headers:
+            # Confirm to backup and create new file
+            confirm = input(print_(f"Missing columns: {missing_headers}. Backup and create new file? (y/Y to confirm): ", color="YELLOW", return_text=True)).lower()
+            if confirm != 'y':
+                print_("Validation failed.", "RED")
+                return False
+            
+            # Backup existing file using shutil
+            backup_path = f"{os.path.splitext(excel_file)[0]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_bak.xlsx"
+            shutil.move(excel_file, backup_path)
+            print_(f"Backed up existing file to {backup_path}", "YELLOW")
+            
+            # Create new file with correct headers
+            create_new_excel()
+            
+            return True
+        
+        return True
+        
+    except Exception as e:
+        print_(f"Error validating Excel file: {str(e)}", "RED")
+        return False
 
 
 def get_result_status(workbook, row_index):
@@ -165,7 +233,6 @@ def append_data_to_excel(excel_file=EXCEL_FILE_PATH, data=None):
         headers = {cell.value: cell.column for cell in sheet[1]}
 
         # List of all possible columns
-        from config.prompt import ALL_FIELDS
         all_columns = ALL_FIELDS
 
         # Add any missing columns
@@ -275,6 +342,7 @@ def open_excel_file(excel_file=EXCEL_FILE_PATH):
             subprocess.run(['start', '', excel_file], shell=True)
         else:  # Linux and other OS
             subprocess.run(['xdg-open', excel_file])
+        print_(f"Excel file opened successfully.", "GREEN")
     except Exception as e:
         print_(f"Error opening Excel file: {str(e)}", "RED")
         return False

@@ -11,7 +11,7 @@ import sys
 
 from utils.string_utils import is_markdown_table, parse_markdown_table
 from utils.excel_utils import summary, open_excel_file, show_last_row, append_data_to_excel, search_applications, \
-    mark_result
+    mark_result, validate_excel_file
 from utils.print_utils import print_, print_results
 from utils.web_utils import save_cookie, validate_cookie, handle_webpage_content, start_browser, add_cookie
 
@@ -58,6 +58,11 @@ def main():
 
     # Clear the console
     os.system('cls' if os.name == 'nt' else 'clear')
+
+    # Validate Excel file
+    if not validate_excel_file():
+        print_("Excel file is invalid. Please check the file.", "RED")
+        return
 
     print_("Validating cookie...")
     if not validate_cookie():
