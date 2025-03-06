@@ -1,6 +1,7 @@
 import re
 import subprocess
 import pickle
+import threading
 from openai import OpenAI
 import requests
 from bs4 import BeautifulSoup
@@ -218,6 +219,11 @@ def handle_webpage_content(content):
         if not webpage_content:
             print_("Failed to fetch webpage content.", "RED")
             return
+        
+        # Send URL to web.archive.org for archiving
+        archive_url_async(content)
+        print_("Sent URL to web.archive.org for archiving")
+        
         content = "URL: " + content + "\n" + webpage_content
 
     # Remove extra blank lines
@@ -273,3 +279,21 @@ def handle_webpage_content(content):
     print(f"Code: {data['Code']}")
     print(f"Type: {data['Type']}")
     print(f"Link: {data['Link']}")
+
+
+def archive_url_async(url):
+    """
+    Asynchronously send URL to web.archive.org for archiving.
+    Does not wait for response.
+    """
+    def _archive_request():
+        try:
+            archive_url = f"https://web.archive.org/save/{url}"
+            requests.get(archive_url, timeout=120)
+            print_(f"Archived URL: {url}", "GREEN")
+        except Exception as e:
+            print_(f"Archive request failed: {str(e)}", "RED")
+    
+    thread = threading.Thread(target=_archive_request)
+    thread.daemon = True  # Set as daemon thread so it won't prevent program exit
+    thread.start()
