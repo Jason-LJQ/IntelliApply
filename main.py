@@ -68,17 +68,19 @@ def main():
     if not validate_cookie():
         print_("Cookie is invalid. It is recommended to update the cookie.", "RED")
 
-    last_search_term = None
     last_results = None
 
     try:
         while True:
             print("\n" + "-" * 100)
-            print_(
-                "Enter search keyword, paste Markdown table, URL, webpage content (wrapped with '< >' or '```'), "
-                "\nEnter a number to mark rejection, "
-                "'delete' to delete last row, 'cookie' to update cookie, 'summary' to view statistics, "
-                "(or 'exit' to quit):")
+            prompt = ""
+            prompt += "Enter search keyword, paste Markdown table, URL, webpage content (wrapped with '< >' or '```'), \n"
+            if last_results:
+                prompt += "Enter a number to mark rejection, "
+            prompt += "'delete' to delete last row, 'cookie' to update cookie, 'summary' to view statistics, "
+            prompt += "(or 'exit' to quit):"
+            
+            print_(prompt)
 
             user_input_lines = []
             line_count = 0
@@ -116,7 +118,6 @@ def main():
                 print_("Webpage content detected. Processing ...")
                 content = '\n'.join(user_input_lines)
                 handle_webpage_content(content)
-                last_search_term = None
                 last_results = None
                 continue
 
@@ -128,13 +129,16 @@ def main():
 
             if user_input.strip().lower() == 'summary':
                 summary()
-                last_search_term = None
+                last_results = None
+                continue
+
+            if user_input.strip().lower() == 'clear':
+                os.system('cls' if os.name == 'nt' else 'clear')
                 last_results = None
                 continue
 
             if user_input.strip().lower().startswith('open'):
                 open_excel_file()
-                last_search_term = None
                 last_results = None
                 continue
 
@@ -143,13 +147,11 @@ def main():
                     show_last_row(delete=True)
                 except KeyboardInterrupt:
                     print_('\nDeletion cancelled. Send SIGINT again to exit.')
-                last_search_term = None
                 last_results = None
                 continue
 
             if user_input.strip().lower() == 'last':
                 show_last_row(delete=False)
-                last_search_term = None
                 last_results = None
                 continue
 
@@ -161,7 +163,6 @@ def main():
                     validate_cookie()
                 else:
                     print_("Cookie is valid.", "GREEN")
-                last_search_term = None
                 last_results = None
                 continue
 
@@ -183,7 +184,6 @@ def main():
                         print_results(search_applications(index=row_index))
                     else:
                         print_("Operation cancelled.", "RED")
-                    last_search_term = None
                     last_results = None
                     continue
                 else:
@@ -201,18 +201,15 @@ def main():
                 # Append the data to the Excel file
                 append_data_to_excel(data=data)
                 print_(f"New record successfully appended to Excel file.", "GREEN")
-                last_search_term = None
                 last_results = None
 
             else:
                 results = search_applications(search_term=user_input)
                 if results:
-                    last_search_term = user_input
                     last_results = results
                     print_results(results, mark_mode=True)
                 else:
                     print_("No matching records found.", "RED")
-                    last_search_term = None
                     last_results = None
 
     except KeyboardInterrupt:
