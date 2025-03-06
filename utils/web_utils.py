@@ -11,7 +11,6 @@ from utils.excel_utils import check_duplicate_entry, append_data_to_excel
 from config.credential import OPENAI_API_KEY, BASE_URL, MODEL
 from utils.print_utils import print_
 
-
 client = OpenAI(api_key=OPENAI_API_KEY, base_url=BASE_URL)
 session = requests.session()
 
@@ -46,38 +45,6 @@ def load_cookies_to_session(cookie_path=COOKIE_PATH):
 session.max_redirects = 5
 session.headers.update(HEADERS)
 load_cookies_to_session()
-
-
-def process_webpage_content(content):
-    """
-    Process webpage content through OpenAI API and return structured data.
-    """
-
-    try:
-        response = client.beta.chat.completions.parse(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": content}
-            ],
-            temperature=0,
-            response_format=JobInfo
-        )
-
-        # Parse the response and convert Job_Title to Job Title
-        result = response.choices[0].message.parsed
-        return {
-            "isValid": result.isValid,
-            "Company": result.Company,
-            "Location": result.Location,
-            "Job Title": result.Job_Title,
-            "Code": result.Code,
-            "Type": result.Type,
-            "Link": result.Link
-        }
-    except Exception as e:
-        print_(f"Error processing content through OpenAI: {str(e)}", "RED")
-        return {"isValid": False}
 
 
 def start_browser(app_path="/Applications/Microsoft Edge Beta.app/Contents/MacOS/Microsoft Edge Beta",
@@ -138,7 +105,7 @@ def add_cookie(cookie_path=COOKIE_PATH):
         session.cookies.update(cookies)
 
         # Save to pickle file
-        if save_cookie():
+        if save_cookie(cookie_path):
             return True
         return False
     except Exception as e:
@@ -171,7 +138,41 @@ def validate_cookie():
     return success
 
 
-def fetch_webpage_content(url, cookie_path=COOKIE_PATH, parse_html=False):
+def process_webpage_content(content):
+    """
+    Process webpage content through OpenAI API and return structured data.
+    """
+
+    try:
+        print_(f"Sending content to {MODEL}...")
+
+        response = client.beta.chat.completions.parse(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": content}
+            ],
+            temperature=0,
+            response_format=JobInfo
+        )
+
+        # Parse the response and convert Job_Title to Job Title
+        result = response.choices[0].message.parsed
+        return {
+            "isValid": result.isValid,
+            "Company": result.Company,
+            "Location": result.Location,
+            "Job Title": result.Job_Title,
+            "Code": result.Code,
+            "Type": result.Type,
+            "Link": result.Link
+        }
+    except Exception as e:
+        print_(f"Error processing content through OpenAI: {str(e)}", "RED")
+        return {"isValid": False}
+
+
+def fetch_webpage_content(url, redirect=True):
     """
     Fetch content from a URL and extract the main text content.
     """
@@ -179,27 +180,26 @@ def fetch_webpage_content(url, cookie_path=COOKIE_PATH, parse_html=False):
         response = session.get(url, timeout=8)
         response.raise_for_status()
 
-        if parse_html:
-            # Parse HTML content
-            soup = BeautifulSoup(response.text, 'html.parser')
+        # Check iframe content in the response and send it instead
+        soup = BeautifulSoup(response.text, 'html.parser')
+        iframes = soup.find_all('iframe')
 
-            # Remove script and style elements
-            for script in soup(["script", "style"]):
-                script.decompose()
-
-            # Get text content
-            text = soup.get_text(separator='\n')
-
-            # Clean up text
-            lines = [line.strip() for line in text.split('\n') if line.strip()]
-            cleaned_text = '\n'.join(lines)
-
-            return cleaned_text
-        else:
-            return response.text
+        # Combine all iframe content into a single string
+        content = response.text
+        if redirect:
+            for iframe in iframes:
+                iframe_src = iframe.get('src')
+                if iframe_src:
+                    print_(f"Found iframe, fetching content from: {iframe_src}")
+                    content += f"<INLINE IFRAME SRC='{iframe_src}'>\n"
+                    content += fetch_webpage_content(iframe_src, redirect=False)
+                    content += f"</INLINE IFRAME>\n"
+                    
+        return content
+    
     except Exception as e:
         print_(f"Error fetching webpage: {str(e)}", "RED")
-        return None
+        return ""
 
 
 def handle_webpage_content(content):
@@ -213,7 +213,7 @@ def handle_webpage_content(content):
 
     # Check if content is a URL
     if content.startswith(('http://', 'https://')):
-        print_("\nFetching content from URL...")
+        print_("Fetching content from URL...")
         webpage_content = fetch_webpage_content(content)
         if not webpage_content:
             print_("Failed to fetch webpage content.", "RED")
@@ -254,7 +254,8 @@ def handle_webpage_content(content):
         try:
             print_("Warning: This job entry already exists in the Excel file.", "RED")
             print(f"Duplicate Entry: {duplicate_entry}")
-            confirm = input(print_("[*] Add it anyway? (y/yes to confirm, any other key to cancel): ", color="YELLOW", return_text=True)).lower()
+            confirm = input(print_("[*] Add it anyway? (y/yes to confirm, any other key to cancel): ", color="YELLOW",
+                                   return_text=True)).lower()
             if confirm.lower() != 'y' and confirm.lower() != 'yes':
                 raise KeyboardInterrupt
         except KeyboardInterrupt:
