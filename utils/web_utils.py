@@ -14,6 +14,7 @@ from utils.print_utils import print_
 
 client = OpenAI(api_key=OPENAI_API_KEY, base_url=BASE_URL)
 session = requests.session()
+session_default = requests.session()
 
 
 def save_cookie(cookie_path=COOKIE_PATH):
@@ -45,6 +46,7 @@ def load_cookies_to_session(cookie_path=COOKIE_PATH):
 
 session.max_redirects = 5
 session.headers.update(HEADERS)
+session_default.headers.update(HEADERS)
 load_cookies_to_session()
 
 
@@ -178,7 +180,10 @@ def fetch_webpage_content(url, redirect=True):
     Fetch content from a URL and extract the main text content.
     """
     try:
-        response = session.get(url, timeout=8)
+        if 'linkedin.com' in url or 'handshake' in url:
+            response = session.get(url, timeout=8)
+        else:
+            response = session_default.get(url, timeout=8)
         response.raise_for_status()
 
         # Check iframe content in the response and send it instead
@@ -290,7 +295,7 @@ def archive_url_async(url):
         try:
             archive_url = f"https://web.archive.org/save/{url}"
             requests.get(archive_url, timeout=120)
-            print_(f"Archived URL: {url}", "GREEN")
+            # print_(f"Archived URL: {url}", "GREEN")
         except Exception as e:
             print_(f"Archive request failed: {str(e)}", "RED")
     
