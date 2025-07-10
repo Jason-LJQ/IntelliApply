@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 from config.config import DOMAIN_KEYWORDS, COOKIE_PATH, HEADERS
 from config.prompt import SYSTEM_PROMPT, JobInfo, REQUIRED_FIELDS
 from utils.excel_utils import check_duplicate_entry, append_data_to_excel
-from config.credential import OPENAI_API_KEY, BASE_URL, MODEL
+from config.credential import OPENAI_API_KEY, BASE_URL, MODEL, REASONING_EFFORT
 from utils.print_utils import print_
 
 client = OpenAI(api_key=OPENAI_API_KEY, base_url=BASE_URL)
@@ -45,6 +45,7 @@ def load_cookies_to_session(cookie_path=COOKIE_PATH):
 
 
 session.max_redirects = 5
+session_default.max_redirects = 5
 session.headers.update(HEADERS)
 session_default.headers.update(HEADERS)
 load_cookies_to_session()
@@ -151,6 +152,7 @@ def process_webpage_content(content):
 
         response = client.beta.chat.completions.parse(
             model=MODEL,
+            reasoning_effort=REASONING_EFFORT,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": content}
