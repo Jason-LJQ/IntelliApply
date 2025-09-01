@@ -5,6 +5,7 @@ import threading
 from openai import OpenAI
 import requests
 from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 
 from config.config import DOMAIN_KEYWORDS, COOKIE_PATH, HEADERS
 from config.prompt import SYSTEM_PROMPT, JobInfo, REQUIRED_FIELDS
@@ -128,7 +129,7 @@ def validate_cookie():
     success = True
     for url, keywords in DOMAIN_KEYWORDS.items():
         try:
-            response = session.get(url, timeout=3)
+            response = session.get(url, timeout=5)
             if response.status_code == 200 and all(keyword in response.text.lower() for keyword in keywords):
                 print_(f"{url} LOGGED IN.", "GREEN")
             else:
@@ -177,7 +178,7 @@ def process_webpage_content(content):
         return {"isValid": False}
 
 
-def fetch_webpage_content(url, redirect=True):
+def fetch_with_requests(url, redirect=True):
     """
     Fetch content from a URL and extract the main text content.
     """
@@ -200,14 +201,38 @@ def fetch_webpage_content(url, redirect=True):
                 if iframe_src:
                     print_(f"Found iframe, fetching content from: {iframe_src}")
                     content += f"<INLINE IFRAME SRC='{iframe_src}'>\n"
-                    content += fetch_webpage_content(iframe_src, redirect=False)
+                    content += fetch_with_requests(iframe_src, redirect=False)
                     content += f"</INLINE IFRAME>\n"
-                    
+
         return content
-    
+
     except Exception as e:
         print_(f"Error fetching webpage: {str(e)}", "RED")
         return ""
+
+
+def fetch_with_playwright(url):
+    """
+    Fetch dynamic content using Playwright.
+    """
+
+    print_("Attempting to fetch dynamic content with Playwright...", "YELLOW")
+
+    try:
+        print_("Using Playwright for dynamic content loading...")
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(url, timeout=12000, wait_until='networkidle')
+            content = page.content()
+            browser.close()
+            return content
+    except Exception as e:
+        print_(f"Playwright failed: {str(e)}", "RED")
+        return ""
+
+
+FETCH_METHOD = ['requests', 'playwright']
 
 
 def handle_webpage_content(content):
@@ -219,34 +244,59 @@ def handle_webpage_content(content):
     if content.startswith('view-source:'):
         content = content[11:]  # Remove 'view-source:' prefix
 
+    def fetch_webpage_helper(url, method):
+        print_(f"Fetching content from URL with {method}...", "YELLOW")
+        if method == 'requests':
+            webpage_content = fetch_with_requests(url)
+        elif method == 'playwright':
+            webpage_content = fetch_with_playwright(url)
+
+        if not webpage_content:
+            print_(f"Failed to fetch webpage content with {method}.", "RED")
+            return None
+
+        content = "URL: " + url + "\n" + webpage_content
+        return content
+
+    def process_helper(content):
+        # Process through OpenAI
+        result = process_webpage_content(content)
+
+        # Validate required fields one by one
+        if not result.get('isValid', False):
+            print_(f"LLM Backend: Invalid content format.", "RED")
+            return None
+
+        for field in REQUIRED_FIELDS:
+            if field not in result or not str(result[field]).strip():
+                print_(f"LLM Backend: Required field \"{field}\" not found.", "RED")
+                return None
+
+        return result
+
     # Check if content is a URL
     if content.startswith(('http://', 'https://')):
-        print_("Fetching content from URL...")
-        webpage_content = fetch_webpage_content(content)
-        if not webpage_content:
-            print_("Failed to fetch webpage content.", "RED")
+        url = content
+        result = None
+
+        for method in FETCH_METHOD:
+            fetched_content = fetch_webpage_helper(url, method)
+            if not fetched_content:
+                continue
+
+            result = process_helper(fetched_content)
+            if result:
+                break
+        if not result:
+            print_(f"Failed to fetch webpage content with any method.", "RED")
             return
-        
+
         # Send URL to web.archive.org for archiving
-        archive_url_async(content)
+        archive_url_async(url)
         print_("Sent URL to web.archive.org for archiving")
-        
-        content = "URL: " + content + "\n" + webpage_content
-
-    # Remove extra blank lines
-    cleaned_content = '\n'.join(line for line in content.split('\n') if line.strip())
-
-    # Process through OpenAI
-    result = process_webpage_content(cleaned_content)
-
-    # Validate required fields one by one
-    if not result.get('isValid', False):
-        print_("Invalid content format.", "RED")
-        return
-
-    for field in REQUIRED_FIELDS:
-        if field not in result or not str(result[field]).strip():
-            print_("Could not extract valid information from the content.", "RED")
+    else:
+        result = process_helper(content)
+        if not result:
             return
 
     # All validations passed, prepare data for Excel
@@ -293,6 +343,7 @@ def archive_url_async(url):
     Asynchronously send URL to web.archive.org for archiving.
     Does not wait for response.
     """
+
     def _archive_request():
         try:
             archive_url = f"https://web.archive.org/save/{url}"
@@ -300,7 +351,7 @@ def archive_url_async(url):
             # print_(f"Archived URL: {url}", "GREEN")
         except Exception as e:
             print_(f"Archive request failed: {str(e)}", "RED")
-    
+
     thread = threading.Thread(target=_archive_request)
     thread.daemon = True  # Set as daemon thread so it won't prevent program exit
     thread.start()
