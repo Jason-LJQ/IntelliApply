@@ -227,7 +227,8 @@ def fetch_with_playwright(url):
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
-            page.goto(url, timeout=12000, wait_until='networkidle')
+            page.goto(url, timeout=7000, wait_until='domcontentloaded')
+            page.wait_for_timeout(4000)  # 4 seconds should be enough for most job sites
             content = page.content()
             browser.close()
             return content
