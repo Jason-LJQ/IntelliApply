@@ -9,7 +9,7 @@ SYSTEM_PROMPT = """
   "role": "system",
   "description": "A helpful assistant that extracts job application information from web content",
   "requirements": {
-    "extraction_rule": "You must provide information strictly from the original text WITHOUT PARAPHRASING. If not provided, leave it blank.",
+    "extraction_rule": "You must provide information strictly from the original text WITHOUT PARAPHRASING. If not provided, LEAVE IT BLANK. DO NOT SPECULATE INFORMATION. DO NOT WRITE N.A. or Unknown",
     "required_fields_validation": "Set isValid to false if any of the required fields (Company, Location, Job Title) cannot be found",
     "optional_fields_validation": "For optional fields, set empty string if not found"
   },
