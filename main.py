@@ -15,12 +15,21 @@ from utils.excel_utils import summary, open_excel_file, show_last_row, append_da
 from utils.print_utils import print_, print_results
 from utils.web_utils import save_cookie, validate_cookie, handle_webpage_content, start_browser, add_cookie
 
+exit_flag = False
+
 
 def signal_handler(sig, frame):
-    print_("\nSaving cookie ...")
-    save_cookie()
-    print_('\nExiting ...', "RED")
-    sys.exit(0)
+    global exit_flag
+    if not exit_flag:
+        # delete the last line
+        print("\033[F", end="")
+        print_("\n Prevous line deleted. Press Ctrl+C again to exit.", "YELLOW")
+        exit_flag = True
+    else:
+        print_("\nSaving cookie ...")
+        save_cookie()
+        print_('\nExiting ...', "RED")
+        sys.exit(0)
 
 
 def detect_ending(min_threshold=0.05, max_threshold=0.5):
@@ -68,9 +77,9 @@ def main():
     if not validate_cookie():
         print_("Cookie is invalid. It is recommended to update the cookie.", "RED")
 
-    last_results = None
+    def main_loop():
+        last_results = None
 
-    try:
         while True:
             print("\n" + "-" * 100)
             prompt = ""
@@ -79,7 +88,7 @@ def main():
                 prompt += "Enter a number to mark rejection, "
             prompt += "'delete' to delete last row, 'cookie' to update cookie, 'summary' to view statistics, "
             prompt += "(or 'exit' to quit):"
-            
+
             print_(prompt)
 
             user_input_lines = []
@@ -112,6 +121,10 @@ def main():
                     break
                 user_input_lines.append(line)
                 line_count += 1
+
+            if user_input_lines:
+                global exit_flag
+                exit_flag = False
 
             if is_webpage_content:
                 print("|" + "-" * 99)
@@ -212,8 +225,11 @@ def main():
                     print_("No matching records found.", "RED")
                     last_results = None
 
-    except KeyboardInterrupt:
-        signal_handler(signal.SIGINT, None)
+    while True:
+        try:
+            main_loop()
+        except KeyboardInterrupt:
+            signal_handler(signal.SIGINT, None)
 
 
 if __name__ == "__main__":
