@@ -2,6 +2,7 @@ import re
 import subprocess
 import pickle
 import threading
+import time
 from openai import OpenAI
 import requests
 from bs4 import BeautifulSoup
@@ -234,9 +235,66 @@ def fetch_with_requests(url, redirect=True):
         return ""
 
 
+def load_cookies_for_playwright(cookie_path=COOKIE_PATH):
+    """
+    Load cookies from pickle file and convert them to Playwright format.
+    
+    Args:
+    - cookie_path: Path to the pickle file containing cookies
+    
+    Returns:
+    - list: List of cookie dictionaries in Playwright format, or empty list if failed
+    """
+    try:
+        with open(cookie_path, 'rb') as f:
+            requests_cookies = pickle.load(f)
+            
+        # Convert requests cookies to Playwright format
+        playwright_cookies = []
+        for cookie in requests_cookies:
+            # Skip cookies with missing essential fields
+            if not cookie.name or not cookie.value or not cookie.domain:
+                continue
+
+            # Create base cookie structure
+            playwright_cookie = {
+                'name': cookie.name,
+                'value': cookie.value,
+                'domain': cookie.domain,
+                'path': cookie.path or '/',
+            }
+            
+            # Add optional fields if they exist
+            if cookie.expires:
+                if cookie.expires < time.time():
+                    continue
+                playwright_cookie['expires'] = int(cookie.expires)
+            if hasattr(cookie, 'secure') and cookie.secure:
+                playwright_cookie['secure'] = True
+            if hasattr(cookie, 'httpOnly') and cookie.httpOnly:
+                playwright_cookie['httpOnly'] = True
+            if hasattr(cookie, '_rest'):
+                if cookie._rest.get("HttpOnly"):
+                    playwright_cookie['httpOnly'] = True
+                if 'SameSite' in cookie._rest:
+                    playwright_cookie['sameSite'] = cookie._rest['SameSite'].title()
+                
+            playwright_cookies.append(playwright_cookie)
+        
+        # print_(f"Loaded {len(playwright_cookies)} cookies for Playwright", "GREEN")
+        return playwright_cookies
+        
+    except FileNotFoundError:
+        print_(f"Cookie file not found at path: {cookie_path}", "YELLOW")
+        return []
+    except Exception as e:
+        print_(f"Failed to load cookies for Playwright: {e}", "RED")
+        return []
+
+
 def fetch_with_playwright(url):
     """
-    Fetch dynamic content using Playwright.
+    Fetch dynamic content using Playwright with cookie support.
     """
 
     print_("Attempting to fetch dynamic content with Playwright...", "YELLOW")
@@ -245,7 +303,13 @@ def fetch_with_playwright(url):
         print_("Using Playwright for dynamic content loading...")
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+            # Create browser context and add cookies
+            context = browser.new_context()
+            # if 'linkedin.com' in url or 'handshake.com' in url:
+            #     cookies = load_cookies_for_playwright()
+            #     if cookies:
+            #         context.add_cookies(cookies)
+            page = context.new_page()
             page.goto(url, timeout=7000, wait_until='domcontentloaded')
             page.wait_for_timeout(4000)  # 4 seconds should be enough for most job sites
             content = page.content()
