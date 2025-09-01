@@ -182,6 +182,21 @@ def process_webpage_content(content):
     return {"isValid": False}
 
 
+def remove_script_content(content):
+    """
+    Remove all script tags and their content from HTML content.
+    """
+    try:
+        soup = BeautifulSoup(content, 'html.parser')
+        # Remove all script tags and their content
+        for script in soup.find_all('script'):
+            script.decompose()
+        return str(soup)
+    except Exception as e:
+        print_(f"Error removing script content: {str(e)}", "RED")
+        return content
+
+
 def fetch_with_requests(url, redirect=True):
     """
     Fetch content from a URL and extract the main text content.
@@ -193,16 +208,20 @@ def fetch_with_requests(url, redirect=True):
             response = session_default.get(url, timeout=8)
         response.raise_for_status()
 
+        content = response.text
+
+        # Remove script content from the final content
+        content = remove_script_content(content)
+
         # Check iframe content in the response and send it instead
-        soup = BeautifulSoup(response.text, 'html.parser')
+        soup = BeautifulSoup(content, 'html.parser')
         iframes = soup.find_all('iframe')
 
         # Combine all iframe content into a single string
-        content = response.text
         if redirect:
             for iframe in iframes:
                 iframe_src = iframe.get('src')
-                if iframe_src:
+                if iframe_src and "googletagmanager" not in iframe_src:
                     print_(f"Found iframe, fetching content from: {iframe_src}")
                     content += f"<INLINE IFRAME SRC='{iframe_src}'>\n"
                     content += fetch_with_requests(iframe_src, redirect=False)
@@ -231,6 +250,8 @@ def fetch_with_playwright(url):
             page.wait_for_timeout(4000)  # 4 seconds should be enough for most job sites
             content = page.content()
             browser.close()
+            # Remove script content from the final content
+            content = remove_script_content(content)
             return content
     except Exception as e:
         print_(f"Playwright failed: {str(e)}", "RED")
