@@ -11,10 +11,10 @@ from playwright.sync_api import sync_playwright
 from config.config import DOMAIN_KEYWORDS, COOKIE_PATH, HEADERS
 from config.prompt import SYSTEM_PROMPT, JobInfo, REQUIRED_FIELDS
 from utils.excel_utils import check_duplicate_entry, append_data_to_excel
-from config.credential import OPENAI_API_KEY, BASE_URL, MODEL_LIST, REASONING_EFFORT
+from config.credential import API_KEY_LIST, BASE_URL, MODEL_LIST, REASONING_EFFORT
 from utils.print_utils import print_
 
-client = OpenAI(api_key=OPENAI_API_KEY, base_url=BASE_URL)
+# Initialize session objects
 session = requests.session()
 session_default = requests.session()
 
@@ -147,37 +147,41 @@ def validate_cookie():
 def process_webpage_content(content):
     """
     Process webpage content through OpenAI API and return structured data.
+    Supports multiple API keys with automatic retry logic.
     """
 
-    for model in MODEL_LIST:
-        try:
-            print_(f"Sending content to {model}...")
+    # Try each model with all API keys
+    for model in MODEL_LIST:        
+        for api_key in API_KEY_LIST:
+            try:
+                print_(f"Sending content to {model} with API key {api_key[:10]}...")
+                client = OpenAI(api_key=api_key, base_url=BASE_URL)
 
-            response = client.beta.chat.completions.parse(
-                model=model,
-                reasoning_effort=REASONING_EFFORT,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": content}
-                ],
-                temperature=0,
-                response_format=JobInfo
-            )
+                response = client.beta.chat.completions.parse(
+                    model=model,
+                    reasoning_effort=REASONING_EFFORT,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": content}
+                    ],
+                    temperature=0,
+                    response_format=JobInfo
+                )
 
-            # Parse the response and convert Job_Title to Job Title
-            result = response.choices[0].message.parsed
-            return {
-                "isValid": result.isValid,
-                "Company": result.Company,
-                "Location": result.Location,
-                "Job Title": result.Job_Title,
-                "Code": result.Code,
-                "Type": result.Type,
-                "Link": result.Link
-            }
-        except Exception as e:
-            print_(f"Model {model} error: {str(e)}", "RED")
-            continue
+                # Parse the response and convert Job_Title to Job Title
+                result = response.choices[0].message.parsed
+                return {
+                    "isValid": result.isValid,
+                    "Company": result.Company,
+                    "Location": result.Location,
+                    "Job Title": result.Job_Title,
+                    "Code": result.Code,
+                    "Type": result.Type,
+                    "Link": result.Link
+                }
+            except Exception as e:
+                print_(f"API key {api_key[:10]}... error: {str(e)}", "RED")
+                continue
 
     print_(f"Error processing content through LLM", "RED")
     return {"isValid": False}
