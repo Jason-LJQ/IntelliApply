@@ -10,7 +10,8 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
     'Accept': '*/*',
     'Accept-Language': 'en-US,en;q=0.9',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Connection': 'keep-alive'
+    'Accept-Encoding': 'gzip, deflate',
+    'Connection': 'keep-alive',
+    'Referer': 'https://www.google.com'
 }
 
