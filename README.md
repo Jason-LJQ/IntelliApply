@@ -12,6 +12,11 @@ detection and Excel-based storage.
 
 Stars are welcomed! ^_^
 
+## Screenshots
+
+![Add new jobs](images/Screenshot%201.png)
+![Search jobs and mark results](images/Screenshot%202.png)
+
 ## Features
 
 - **LLM-Powered Information Extraction**: Uses OpenAI-compatible API endpoints with sophisticated prompt engineering and
