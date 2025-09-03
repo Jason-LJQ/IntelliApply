@@ -52,6 +52,66 @@ session.headers.update(HEADERS)
 session_default.headers.update(HEADERS)
 load_cookies_to_session()
 
+# -------- Intelligent Detection Patterns --------
+HYDRATION_PATTERNS = [
+    r'__NEXT_DATA__',  # Next.js
+    r'data-reactroot',  # React hydration
+    r'id=["\'](?:root|app)["\']'  # <div id="root"> / <div id="app">
+]
+JS_REQUIRED_PATTERNS = [
+    r'please enable javascript', r'enable javascript',
+    r'<noscript',  # generic <noscript> block
+    r'cloudflare', r'cf-ray',  # CF challenge hints
+]
+BLOCK_STATUS = {403, 429, 503}
+
+
+def analyze_content_for_playwright(html, status_code, redirect=True) -> bool:
+    """
+    Analyze already fetched content to determine if Playwright is needed.
+    
+    Args:
+        html: HTML content already fetched
+        status_code: HTTP status code from the request
+    
+    Returns:
+        True if Playwright is likely needed, False otherwise
+    """
+
+    if not html:
+        return False
+
+    # Check for blocked status codes
+    if status_code in BLOCK_STATUS:
+        return True
+
+    # Check iframe content in the response and send it instead
+    soup = BeautifulSoup(html, 'html.parser')
+    iframes = soup.find_all('iframe')
+
+    # If redirect is True, check for iframe content
+    if redirect:
+        for iframe in iframes:
+            iframe_src = iframe.get('src')
+            if iframe_src and "googletagmanager" not in iframe_src:
+                iframe_content, _ = get_raw_requests(iframe_src)
+                if analyze_content_for_playwright(iframe_content, status_code, redirect=False):
+                    return True
+
+    html_lc = html.lower()
+
+    # Check for hydration markers (client-side rendering)
+    for pattern in HYDRATION_PATTERNS:
+        if re.search(pattern, html, re.I):
+            return True
+
+    # Check for JS-required / Cloudflare hints
+    for pattern in JS_REQUIRED_PATTERNS:
+        if re.search(pattern, html_lc):
+            return True
+
+    return False
+
 
 def start_browser(app_path="/Applications/Microsoft Edge Beta.app/Contents/MacOS/Microsoft Edge Beta",
                   url=list(DOMAIN_KEYWORDS.keys())):
@@ -151,7 +211,7 @@ def process_webpage_content(content):
     """
 
     # Try each model with all API keys
-    for model in MODEL_LIST:        
+    for model in MODEL_LIST:
         for api_key in API_KEY_LIST:
             try:
                 print_(f"Sending content to {model} with API key {api_key[:10]}...")
@@ -202,9 +262,10 @@ def remove_script_content(content):
         return content
 
 
-def fetch_with_requests(url, redirect=True):
+def get_raw_requests(url):
     """
-    Fetch content from a URL and extract the main text content.
+    Get raw content from a URL using requests.
+    Returns tuple: (content, status_code)
     """
     try:
         if 'linkedin.com' in url or 'handshake' in url:
@@ -212,9 +273,17 @@ def fetch_with_requests(url, redirect=True):
         else:
             response = session_default.get(url, timeout=8)
         response.raise_for_status()
+        return response.text, response.status_code
+    except Exception as e:
+        print_(f"Error fetching webpage: {str(e)}", "RED")
+        return "", 0
 
-        content = response.text
 
+def process_requests_content(content, redirect=True):
+    """
+    Fetch content from a URL and extract the main text content.
+    """
+    try:
         # Remove script content from the final content
         content = remove_script_content(content)
 
@@ -229,7 +298,8 @@ def fetch_with_requests(url, redirect=True):
                 if iframe_src and "googletagmanager" not in iframe_src:
                     print_(f"Found iframe, fetching content from: {iframe_src}")
                     content += f"<INLINE IFRAME SRC='{iframe_src}'>\n"
-                    content += fetch_with_requests(iframe_src, redirect=False)
+                    iframe_content, _ = get_raw_requests(iframe_src)
+                    content += iframe_content
                     content += f"</INLINE IFRAME>\n"
 
         return content
@@ -252,7 +322,7 @@ def load_cookies_for_playwright(cookie_path=COOKIE_PATH):
     try:
         with open(cookie_path, 'rb') as f:
             requests_cookies = pickle.load(f)
-            
+
         # Convert requests cookies to Playwright format
         playwright_cookies = []
         for cookie in requests_cookies:
@@ -267,7 +337,7 @@ def load_cookies_for_playwright(cookie_path=COOKIE_PATH):
                 'domain': cookie.domain,
                 'path': cookie.path or '/',
             }
-            
+
             # Add optional fields if they exist
             if cookie.expires:
                 if cookie.expires < time.time():
@@ -282,12 +352,12 @@ def load_cookies_for_playwright(cookie_path=COOKIE_PATH):
                     playwright_cookie['httpOnly'] = True
                 if 'SameSite' in cookie._rest:
                     playwright_cookie['sameSite'] = cookie._rest['SameSite'].title()
-                
+
             playwright_cookies.append(playwright_cookie)
-        
+
         # print_(f"Loaded {len(playwright_cookies)} cookies for Playwright", "GREEN")
         return playwright_cookies
-        
+
     except FileNotFoundError:
         print_(f"Cookie file not found at path: {cookie_path}", "YELLOW")
         return []
@@ -338,20 +408,6 @@ def handle_webpage_content(content):
     if content.startswith('view-source:'):
         content = content[11:]  # Remove 'view-source:' prefix
 
-    def fetch_webpage_helper(url, method):
-        print_(f"Fetching content from URL with {method}...", "YELLOW")
-        if method == 'requests':
-            webpage_content = fetch_with_requests(url)
-        elif method == 'playwright':
-            webpage_content = fetch_with_playwright(url)
-
-        if not webpage_content:
-            print_(f"Failed to fetch webpage content with {method}.", "RED")
-            return None
-
-        content = "URL: " + url + "\n" + webpage_content
-        return content
-
     def process_helper(content):
         # Process through OpenAI
         result = process_webpage_content(content)
@@ -373,14 +429,34 @@ def handle_webpage_content(content):
         url = content
         result = None
 
-        for method in FETCH_METHOD:
-            fetched_content = fetch_webpage_helper(url, method)
-            if not fetched_content:
-                continue
+        # First try with requests
+        print_(f"Fetching content from URL with requests...", "YELLOW")
+        fetched_raw_content, status_code = get_raw_requests(url)
 
-            result = process_helper(fetched_content)
-            if result:
-                break
+        if not fetched_raw_content:
+            print_(f"Failed to fetch webpage content with requests.", "RED")
+        else:
+            # Analyze the fetched content to see if we need Playwright
+            print_(f"Analyzing content validity...")
+            needs_playwright = analyze_content_for_playwright(fetched_raw_content, status_code)
+
+            if not needs_playwright:
+                # Content looks good, try to process it
+                print_(f"Processing content based on requests...")
+                webpage_content = process_requests_content(fetched_raw_content)
+                webpage_content = "URL: " + url + "\n" + webpage_content
+                result = process_helper(webpage_content)
+
+        # Playwright as fallback
+        if not result:
+            print_(f"Fetching content from URL with playwright...", "YELLOW")
+            fetched_content_pw = fetch_with_playwright(url)
+            if fetched_content_pw:
+                webpage_content = "URL: " + url + "\n" + fetched_content_pw
+                result = process_helper(webpage_content)
+            else:
+                print_(f"Failed to fetch webpage content with playwright.", "RED")
+
         if not result:
             print_(f"Failed to fetch webpage content with any method.", "RED")
             return
