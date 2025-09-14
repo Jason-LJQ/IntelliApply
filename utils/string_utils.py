@@ -1,4 +1,5 @@
 import re
+import json
 
 
 def get_abbreviation(name):
@@ -97,6 +98,62 @@ def is_company_match(keyword, target):
             return True
 
     return False
+
+
+def parse_json_safe(text):
+    """
+    Safely parse JSON with normalization of non-standard characters.
+    Handles Chinese quotes, Chinese colons, and other Unicode characters.
+    
+    Args:
+        text: JSON string to parse
+    
+    Returns:
+        tuple: (success: bool, result: dict or None, error: str or None)
+    """
+    if not text:
+        return False, None, "Empty input"
+    
+    try:
+        text = text.strip()
+        
+        # Basic JSON structure check - must start with { or [
+        if not re.match(r'^\s*[\[{]', text):
+            return False, None, "Not a JSON structure"
+        
+        # Map of non-standard characters to standard JSON characters
+        translation_table = str.maketrans({
+            '“': '"',
+            '”': '"',
+            '‘': "'",
+            '’': "'",
+            '：': ':',
+            '„': '"',
+            '‚': "'",
+            '‹': "'",
+            '›': "'",
+            '«': '"',
+            '»': '"',
+        })
+        
+        # Replace all non-standard characters with standard ones
+        normalized_text = text.translate(translation_table)
+        
+        # Try to parse as JSON
+        result = json.loads(normalized_text)
+        return True, result, None
+        
+    except json.JSONDecodeError as e:
+        return False, None, f"JSON decode error: {str(e)}"
+    except Exception as e:
+        return False, None, f"Unexpected error: {str(e)}"
+
+
+def is_json(text):
+    """Check if the text is valid JSON"""
+    success, _, _ = parse_json_safe(text)
+    return success
+
 
 def is_markdown_table(input_string):
     """

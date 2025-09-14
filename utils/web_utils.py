@@ -3,6 +3,7 @@ import subprocess
 import pickle
 import threading
 import time
+import json
 from openai import OpenAI
 import requests
 from bs4 import BeautifulSoup
@@ -13,6 +14,7 @@ from config.prompt import SYSTEM_PROMPT, JobInfo, REQUIRED_FIELDS
 from utils.excel_utils import check_duplicate_entry, append_data_to_excel
 from config.credential import API_KEY_LIST, BASE_URL, MODEL_LIST, REASONING_EFFORT
 from utils.print_utils import print_
+from utils.string_utils import parse_json_safe
 
 # Initialize session objects
 session = requests.session()
@@ -399,6 +401,119 @@ def fetch_with_playwright(url):
 FETCH_METHOD = ['requests', 'playwright']
 
 
+def validate_job_data(result, source="LLM Backend"):
+    """
+    Validate job data result from any source (LLM or JSON input).
+    
+    Args:
+        result: Dictionary containing job information
+        source: String describing the data source for error messages
+    
+    Returns:
+        dict or None: Validated result or None if validation fails
+    """
+    # Validate required fields one by one
+    if not result.get('isValid', False):
+        print_(f"{source}: Invalid content format.", "RED")
+        return None
+
+    for field in REQUIRED_FIELDS:
+        if field not in result or not str(result[field]).strip():
+            print_(f"{source}: Required field \"{field}\" not found.", "RED")
+            return None
+
+    return result
+
+
+def prepare_excel_data(result):
+    """
+    Prepare validated job data for Excel insertion.
+    
+    Args:
+        result: Validated job data dictionary
+    
+    Returns:
+        dict: Data formatted for Excel
+    """
+    from datetime import datetime
+    return {
+        'Company': result['Company'],
+        'Location': result['Location'],
+        'Job Title': result['Job Title'],
+        'Code': result.get('Code', ''),  # Optional field
+        'Type': result.get('Type', ''),  # Optional field
+        'Link': result.get('Link', ''),  # Optional field
+        'Applied Date': datetime.now().strftime('%Y-%m-%d'),  # Add current date
+    }
+
+
+def handle_duplicate_check(data):
+    """
+    Handle duplicate entry checking with user confirmation.
+    
+    Args:
+        data: Excel data dictionary
+    
+    Returns:
+        bool: True if should proceed, False if cancelled
+    """
+    duplicate_entry = check_duplicate_entry(new_data=data)
+    if duplicate_entry is not None:
+        try:
+            print_("Warning: This job entry already exists in the Excel file.", "RED")
+            print(f"Duplicate Entry: {duplicate_entry}")
+            confirm = input(print_("[*] Add it anyway? (y/yes to confirm, any other key to cancel): ", color="YELLOW",
+                                   return_text=True)).lower()
+            if confirm.lower() != 'y' and confirm.lower() != 'yes':
+                raise KeyboardInterrupt
+        except KeyboardInterrupt:
+            print_("Addition cancelled.", "RED")
+            return False
+    return True
+
+
+def display_job_result(data):
+    """
+    Display the successfully processed job data.
+    
+    Args:
+        data: Excel data dictionary
+    """
+    print_(f"Successfully extracted and added to Excel:", "GREEN")
+    print(f"Company: {data['Company']}")
+    print(f"Location: {data['Location']}")
+    print(f"Job Title: {data['Job Title']}")
+    print(f"Code: {data['Code']}")
+    print(f"Type: {data['Type']}")
+    print(f"Link: {data['Link']}")
+
+
+def process_validated_job_data(result, source="LLM Backend"):
+    """
+    Process validated job data: prepare for Excel, check duplicates, and save.
+    
+    Args:
+        result: Validated job data dictionary
+        source: String describing the data source
+    
+    Returns:
+        bool: True if successfully processed, False otherwise
+    """
+    # Prepare data for Excel
+    data = prepare_excel_data(result)
+    
+    # Check for duplicates
+    if not handle_duplicate_check(data):
+        return False
+    
+    # Add to Excel
+    append_data_to_excel(data=[data])
+    
+    # Display result
+    display_job_result(data)
+    return True
+
+
 def handle_webpage_content(content):
     """
     Handle webpage content: process it and add to Excel if valid
@@ -411,18 +526,7 @@ def handle_webpage_content(content):
     def process_helper(content):
         # Process through OpenAI
         result = process_webpage_content(content)
-
-        # Validate required fields one by one
-        if not result.get('isValid', False):
-            print_(f"LLM Backend: Invalid content format.", "RED")
-            return None
-
-        for field in REQUIRED_FIELDS:
-            if field not in result or not str(result[field]).strip():
-                print_(f"LLM Backend: Required field \"{field}\" not found.", "RED")
-                return None
-
-        return result
+        return validate_job_data(result, "LLM Backend")
 
     # Check if content is a URL
     if content.startswith(('http://', 'https://')):
@@ -469,43 +573,38 @@ def handle_webpage_content(content):
         if not result:
             return
 
-    # All validations passed, prepare data for Excel
-    from datetime import datetime
-    data = {
-        'Company': result['Company'],
-        'Location': result['Location'],
-        'Job Title': result['Job Title'],
-        'Code': result.get('Code', ''),  # Optional field
-        'Type': result.get('Type', ''),  # Optional field
-        'Link': result.get('Link', ''),  # Optional field
-        'Applied Date': datetime.now().strftime('%Y-%m-%d'),  # Add current date
-    }
+    # Process the validated result
+    process_validated_job_data(result, "LLM Backend")
 
-    # Check for duplicates
-    duplicate_entry = check_duplicate_entry(new_data=data)
-    if duplicate_entry is not None:
-        try:
-            print_("Warning: This job entry already exists in the Excel file.", "RED")
-            print(f"Duplicate Entry: {duplicate_entry}")
-            confirm = input(print_("[*] Add it anyway? (y/yes to confirm, any other key to cancel): ", color="YELLOW",
-                                   return_text=True)).lower()
-            if confirm.lower() != 'y' and confirm.lower() != 'yes':
-                raise KeyboardInterrupt
-        except KeyboardInterrupt:
-            print_("Addition cancelled.", "RED")
-            return
 
-    # Add to Excel
-    append_data_to_excel(data=[data])
-
-    # Display result
-    print_(f"Successfully extracted and added to Excel:", "GREEN")
-    print(f"Company: {data['Company']}")
-    print(f"Location: {data['Location']}")
-    print(f"Job Title: {data['Job Title']}")
-    print(f"Code: {data['Code']}")
-    print(f"Type: {data['Type']}")
-    print(f"Link: {data['Link']}")
+def handle_json_content(json_content):
+    """
+    Handle JSON input: parse and validate job data, then add to Excel if valid.
+    
+    Args:
+        json_content: JSON string containing job information
+    
+    Returns:
+        bool: True if successfully processed, False otherwise
+    """
+    # Parse JSON with normalization
+    success, result, error = parse_json_safe(json_content)
+    
+    if not success:
+        print_(f"JSON Input: {error}", "RED")
+        return False
+    
+    # Ensure Job_Title is mapped to Job Title for validation
+    if 'Job_Title' in result and 'Job Title' not in result:
+        result['Job Title'] = result['Job_Title']
+    
+    # Validate the parsed JSON data
+    validated_result = validate_job_data(result, "JSON Input")
+    if not validated_result:
+        return False
+    
+    # Process the validated result
+    return process_validated_job_data(validated_result, "JSON Input")
 
 
 def archive_url_async(url):

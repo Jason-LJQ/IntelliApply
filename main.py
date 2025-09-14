@@ -9,11 +9,11 @@ import time
 import signal
 import sys
 
-from utils.string_utils import is_markdown_table, parse_markdown_table
+from utils.string_utils import is_markdown_table, parse_markdown_table, is_json
 from utils.excel_utils import summary, open_excel_file, show_last_row, append_data_to_excel, search_applications, \
     mark_result, validate_excel_file
 from utils.print_utils import print_, print_results
-from utils.web_utils import save_cookie, validate_cookie, handle_webpage_content, start_browser, add_cookie
+from utils.web_utils import save_cookie, validate_cookie, handle_webpage_content, start_browser, add_cookie, handle_json_content
 
 exit_flag = False
 
@@ -83,7 +83,7 @@ def main():
         while True:
             print("\n" + "-" * 100)
             prompt = ""
-            prompt += "Enter search keyword, paste Markdown table, URL, webpage content (wrapped with '< >' or '```'), \n"
+            prompt += "Enter search keyword, paste Markdown table, one-line JSON data, URL, webpage content (wrapped with '< >' or '```'), \n"
             if last_results:
                 prompt += "Enter a number to mark rejection, "
             prompt += "'delete' to delete last row, 'cookie' to update cookie, 'summary' to view statistics, "
@@ -215,6 +215,13 @@ def main():
                 append_data_to_excel(data=data)
                 print_(f"New record successfully appended to Excel file.", "GREEN")
                 last_results = None
+
+            elif is_json(user_input):
+                # Handle JSON input
+                print_("JSON content detected. Processing ...")
+                handle_json_content(user_input)
+                last_results = None
+                continue
 
             else:
                 results = search_applications(search_term=user_input)
