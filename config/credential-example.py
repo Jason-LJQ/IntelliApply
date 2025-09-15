@@ -11,3 +11,6 @@ REASONING_EFFORT = "none"
 
 # Excel file path configuration
 EXCEL_FILE_PATH = "/path/to/your/excel/file"
+
+# Folder path to the backup folder
+BACKUP_FOLDER_PATH = "/path/to/job_snapshot"

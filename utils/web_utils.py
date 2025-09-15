@@ -3,7 +3,8 @@ import subprocess
 import pickle
 import threading
 import time
-import json
+import os
+from datetime import datetime
 from openai import OpenAI
 import requests
 from bs4 import BeautifulSoup
@@ -12,7 +13,7 @@ from playwright.sync_api import sync_playwright
 from config.config import DOMAIN_KEYWORDS, COOKIE_PATH, HEADERS
 from config.prompt import SYSTEM_PROMPT, JobInfo, REQUIRED_FIELDS
 from utils.excel_utils import check_duplicate_entry, append_data_to_excel
-from config.credential import API_KEY_LIST, BASE_URL, MODEL_LIST, REASONING_EFFORT
+from config.credential import API_KEY_LIST, BASE_URL, MODEL_LIST, REASONING_EFFORT, BACKUP_FOLDER_PATH
 from utils.print_utils import print_
 from utils.string_utils import parse_json_safe
 
@@ -565,9 +566,11 @@ def handle_webpage_content(content):
             print_(f"Failed to fetch webpage content with any method.", "RED")
             return
 
-        # Send URL to web.archive.org for archiving
-        archive_url_async(url)
-        print_("Sent URL to web.archive.org for archiving")
+        # Backup URL to local storage using singlefile with job info
+        company = result.get('Company', '')
+        job_title = result.get('Job Title', '')
+        backup_url_local_async(url, company, job_title)
+        print_("Started local backup of URL using singlefile")
     else:
         result = process_helper(content)
         if not result:
@@ -607,20 +610,104 @@ def handle_json_content(json_content):
     return process_validated_job_data(validated_result, "JSON Input")
 
 
-def archive_url_async(url):
+def get_backup_directory():
     """
-    Asynchronously send URL to web.archive.org for archiving.
-    Does not wait for response.
+    Get the backup directory path from configuration.
+    Creates the directory if it doesn't exist.
+    """
+    try:
+        backup_dir = BACKUP_FOLDER_PATH
+        
+        # Create backup directory if it doesn't exist
+        if not os.path.exists(backup_dir):
+            os.makedirs(backup_dir, exist_ok=True)
+            print_(f"Created backup directory: {backup_dir}", "GREEN")
+        
+        return backup_dir
+    except Exception as e:
+        print_(f"Error creating backup directory: {str(e)}", "RED")
+        return None
+
+
+def generate_backup_filename(company, job_title, backup_dir):
+    """
+    Generate backup filename in format: company_jobtitle_currentdate_no.html
+    Increments 'no' if duplicate files exist.
+    
+    Args:
+        company: Company name
+        job_title: Job title
+        backup_dir: Backup directory path
+    
+    Returns:
+        str: Generated filename
+    """
+    try:
+        # Clean company and job title for filename
+        company_clean = re.sub(r'[^\w\-_.]', '_', company.strip()) if company else "unknown_company"
+        job_title_clean = re.sub(r'[^\w\-_.]', '_', job_title.strip()) if job_title else "unknown_job"
+        
+        # Get current date
+        current_date = datetime.now().strftime("%Y%m%d")
+        
+        # Generate base filename
+        base_filename = f"{company_clean}_{job_title_clean}_{current_date}"
+        filename = f"{base_filename}.html"
+        
+        # Check if file already exists
+        if not os.path.exists(os.path.join(backup_dir, filename)):
+            return filename
+        
+        # If duplicate exists, start adding numbers from 2
+        no = 2
+        while True:
+            filename = f"{base_filename}_{no}.html"
+            if not os.path.exists(os.path.join(backup_dir, filename)):
+                return filename
+            no += 1
+        
+    except Exception as e:
+        print_(f"Error generating backup filename: {str(e)}", "YELLOW")
+        # Fallback to timestamp-based naming
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return f"backup_{timestamp}.html"
+
+
+def backup_url_local_async(url, company="", job_title=""):
+    """
+    Asynchronously backup URL to local storage using singlefile.
+    Does not wait for response. Handles errors gracefully without exiting.
+    
+    Args:
+        url: URL to backup
+        company: Company name for filename generation
+        job_title: Job title for filename generation
     """
 
-    def _archive_request():
+    def _backup_request():
         try:
-            archive_url = f"https://web.archive.org/save/{url}"
-            requests.get(archive_url, timeout=120)
-            # print_(f"Archived URL: {url}", "GREEN")
+            from utils.singlefile import download_page
+            
+            backup_dir = get_backup_directory()
+            if not backup_dir:
+                print_(f"Failed to get backup directory, skipping backup", "RED")
+                return
+            
+            # Generate filename using company and job title
+            filename_template = generate_backup_filename(company, job_title, backup_dir)
+            
+            # Use existing cookie path for singlefile
+            try:
+                result = download_page(url, COOKIE_PATH, backup_dir, filename_template)
+                
+                if result == -1:
+                    print_(f"Failed to backup URL locally.", "RED")
+            except Exception as save_error:
+                print_(f"Error during backup save: {str(save_error)}", "RED")
+                
         except Exception as e:
-            print_(f"Archive request failed: {str(e)}", "RED")
+            print_(f"Local backup request failed: {str(e)}", "RED")
 
-    thread = threading.Thread(target=_archive_request)
+    thread = threading.Thread(target=_backup_request)
     thread.daemon = True  # Set as daemon thread so it won't prevent program exit
     thread.start()
