@@ -82,16 +82,18 @@ def main():
         print_("Cookie is invalid. It is recommended to update the cookie.", "RED")
 
     def main_loop():
+        global exit_flag
         last_results = None
 
         while True:
             print("\n" + "-" * 100)
             prompt = ""
-            prompt += "Enter search keyword, one-line JSON data, URL, webpage content (wrapped with '< >' or '```'), \n"
+            prompt += ("Search with keywords or initials, Add new record by one-line JSON data / URL / webpage content "
+                       "(wrapped with '< >' or '```'), \nEnter ")
             if last_results:
-                prompt += "Enter a number to mark rejection, "
-            prompt += "'delete' to delete last row, 'cookie' to update cookie, 'summary' to view statistics, 'open' to open Excel file,"
-            prompt += "(or 'exit' to quit):"
+                prompt += "a number to mark rejection, "
+            prompt += "'delete' to delete last record, 'cookie' to update cookie, 'summary' to view statistics, "
+            prompt += "'open' to open Excel file, (or 'exit' to quit):"
 
             print_(prompt)
 
@@ -127,7 +129,6 @@ def main():
                 line_count += 1
 
             if user_input_lines:
-                global exit_flag
                 exit_flag = False
 
             if is_webpage_content:
@@ -142,6 +143,8 @@ def main():
 
             if user_input.strip().lower() == 'exit':
                 print_("Exiting ...")
+                exit_flag = True
+                signal_handler(None, None)
                 break
 
             if user_input.strip().lower() == 'summary':
