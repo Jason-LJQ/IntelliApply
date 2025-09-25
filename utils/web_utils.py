@@ -522,7 +522,7 @@ def handle_webpage_content(content):
     # Remove view-source: prefix if present
     content = content.strip()
     if content.startswith('view-source:'):
-        content = content[11:]  # Remove 'view-source:' prefix
+        content = content[12:]  # Remove 'view-source:' prefix
 
     def process_helper(content):
         # Process through OpenAI
