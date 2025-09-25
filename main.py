@@ -87,10 +87,10 @@ def main():
         while True:
             print("\n" + "-" * 100)
             prompt = ""
-            prompt += "Enter search keyword, paste Markdown table, one-line JSON data, URL, webpage content (wrapped with '< >' or '```'), \n"
+            prompt += "Enter search keyword, one-line JSON data, URL, webpage content (wrapped with '< >' or '```'), \n"
             if last_results:
                 prompt += "Enter a number to mark rejection, "
-            prompt += "'delete' to delete last row, 'cookie' to update cookie, 'summary' to view statistics, "
+            prompt += "'delete' to delete last row, 'cookie' to update cookie, 'summary' to view statistics, 'open' to open Excel file,"
             prompt += "(or 'exit' to quit):"
 
             print_(prompt)
@@ -154,7 +154,7 @@ def main():
                 last_results = None
                 continue
 
-            if user_input.strip().lower().startswith('open'):
+            if user_input.strip().lower() == 'open':
                 open_excel_file()
                 last_results = None
                 continue
