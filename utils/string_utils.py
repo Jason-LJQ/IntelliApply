@@ -2,12 +2,32 @@ import re
 import json
 
 
-def get_abbreviation(name):
+def cleaned_string(text):
+    """Clean the string by removing special characters and extra spaces"""
+    if not isinstance(text, str):
+        return ''
+
+    # Step 1: Remove newlines, tabs, carriage returns
+    text = re.sub(r'[\n\t\r]', ' ', text)
+
+    # Step 2: Remove common punctuation and symbols
+    text = re.sub(r'[!@#$%^&*()_+=\[\]{}|;\':"<>?,./-]', '', text)
+
+    # Step 3: Remove extra whitespace
+    text = re.sub(r'\s+', ' ', text)
+
+    # Step 4: Strip leading/trailing whitespace
+    text = text.strip()
+
+    return text
+
+
+def get_abbreviation_lower(name):
     """Get the abbreviation of a string by taking first letters of each word"""
     if not isinstance(name, str):
         return ''
     # Remove special characters, keep only letters and spaces
-    cleaned_name = re.sub(r'[^a-zA-Z\s]', '', str(name))
+    cleaned_name = cleaned_string(name)
     words = cleaned_name.strip().split()
     abbr_parts = []
     for w in words:
@@ -15,7 +35,7 @@ def get_abbreviation(name):
             abbr_parts.append(w)  # Preserve the entire uppercase word
         else:
             abbr_parts.append(w[0].upper() if w else '')
-    return ''.join(abbr_parts)
+    return ''.join(abbr_parts).lower()
 
 
 def normalize_company_name(name):
@@ -23,13 +43,12 @@ def normalize_company_name(name):
     if not isinstance(name, str):
         return ''
     # Remove common company terms
-    common_terms = ['corporation', 'corp', 'inc', 'incorporated', 'limited', 'ltd', 'llc', 'cooperation']
+    common_terms = ['corporation', 'corp', 'inc', 'incorporated', 'limited', 'ltd', 'llc', 'cooperation', 'logo']
     name_lower = str(name).lower().strip()
     for term in common_terms:
         name_lower = re.sub(rf'\b{term}\b', '', name_lower)
     # Remove special characters and extra spaces
-    name_lower = re.sub(r'[^a-zA-Z\s]', '', name_lower)
-    return re.sub(r'\s+', ' ', name_lower).strip()
+    return cleaned_string(name_lower)
 
 
 def format_string(name, limit=55):
@@ -44,9 +63,12 @@ def format_string(name, limit=55):
 def is_company_match(keyword, target):
     """
     Compare if two company names match, considering exact matches and abbreviations
+    All comparisons should be case-insensitive
     """
     if not isinstance(keyword, str) or not isinstance(target, str):
         return False
+
+    keyword, target = cleaned_string(keyword), cleaned_string(target)
 
     # Normalize both company names
     norm_keyword = normalize_company_name(keyword)
@@ -57,25 +79,25 @@ def is_company_match(keyword, target):
         return True
 
     # Get abbreviations
-    abbr1 = get_abbreviation(keyword)
-    abbr2 = get_abbreviation(target)
+    abbr1 = get_abbreviation_lower(keyword)
+    abbr2 = get_abbreviation_lower(target)
 
     # Compare abbreviation with full name and vice versa
     if len(abbr1) > 1:
         if abbr1 == abbr2:
             return True
         # Check if abbr1 matches the first letters of norm_target's words
-        if abbr1 == get_abbreviation(norm_target):
+        if abbr1 == get_abbreviation_lower(norm_target):
             return True
 
     if len(abbr2) > 1:
         # Check if abbr2 matches the first letters of norm_keyword's words
-        if abbr2 == get_abbreviation(norm_keyword):
+        if abbr2 == get_abbreviation_lower(norm_keyword):
             return True
 
     # Additional comparison: check if abbreviation of one matches normalized other
-    abbr1 = get_abbreviation(norm_keyword)
-    abbr2 = get_abbreviation(norm_target)
+    abbr1 = get_abbreviation_lower(norm_keyword)
+    abbr2 = get_abbreviation_lower(norm_target)
 
     if abbr1 == norm_target or abbr2 == norm_keyword:
         return True
@@ -86,8 +108,8 @@ def is_company_match(keyword, target):
 
     if len(words1) >= 2 and len(words2) >= 2:
         # Check if the initials of one match the other's abbreviation
-        initials1 = ''.join(word[0].upper() for word in words1)
-        initials2 = ''.join(word[0].upper() for word in words2)
+        initials1 = ''.join(word[0] for word in words1)
+        initials2 = ''.join(word[0] for word in words2)
 
         if initials1 == abbr2 or initials2 == abbr1:
             return True
@@ -96,6 +118,20 @@ def is_company_match(keyword, target):
     if norm_keyword and norm_target:
         if norm_target.startswith(norm_keyword):
             return True
+
+    return False
+
+
+def is_job_title_match(keyword, target):
+    """
+    Compare if two job titles match, considering exact matches and abbreviations
+    All comparisons should be case-insensitive
+    """
+    if not isinstance(keyword, str) or not isinstance(target, str):
+        return False
+
+    if cleaned_string(keyword).lower() == cleaned_string(target).lower():
+        return True
 
     return False
 
@@ -113,14 +149,14 @@ def parse_json_safe(text):
     """
     if not text:
         return False, None, "Empty input"
-    
+
     try:
         text = text.strip()
-        
+
         # Basic JSON structure check - must start with { or [
         if not re.match(r'^\s*[\[{]', text):
             return False, None, "Not a JSON structure"
-        
+
         # Map of non-standard characters to standard JSON characters
         translation_table = str.maketrans({
             '“': '"',
@@ -135,14 +171,14 @@ def parse_json_safe(text):
             '«': '"',
             '»': '"',
         })
-        
+
         # Replace all non-standard characters with standard ones
         normalized_text = text.translate(translation_table)
-        
+
         # Try to parse as JSON
         result = json.loads(normalized_text)
         return True, result, None
-        
+
     except json.JSONDecodeError as e:
         return False, None, f"JSON decode error: {str(e)}"
     except Exception as e:

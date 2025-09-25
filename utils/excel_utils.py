@@ -5,7 +5,7 @@ import shutil
 from datetime import datetime
 
 from utils.print_utils import print_, print_results
-from utils.string_utils import is_company_match
+from utils.string_utils import is_company_match, is_job_title_match
 from config.credential import EXCEL_FILE_PATH
 from config.prompt import ALL_FIELDS
 
@@ -181,7 +181,6 @@ def search_applications(excel_file=EXCEL_FILE_PATH, search_term="", index=-1):
                 df[col] = df[col].astype(str).apply(lambda x: x.strip() if x != 'nan' else '')
 
         matches = []
-        search_term_lower = search_term.lower().strip()
 
         for index, row in df.iterrows():
             # Check company name match
@@ -195,7 +194,7 @@ def search_applications(excel_file=EXCEL_FILE_PATH, search_term="", index=-1):
                     'row_index': index + 2,  # Store the actual Excel row index (1-indexed, with header)
                 })
             # Check exact job title match
-            elif search_term_lower in row['Job Title'].lower():
+            elif is_job_title_match(search_term, row['Job Title']):
                 matches.append({
                     'Company': row['Company'],
                     'Location': row['Location'],
