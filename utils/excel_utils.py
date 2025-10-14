@@ -5,9 +5,10 @@ import shutil
 from datetime import datetime
 
 from utils.print_utils import print_, print_results
-from utils.string_utils import is_company_match, is_job_title_match
+from utils.string_utils import normalize_company_name, get_abbreviation_lower, cleaned_string
 from config.credential import EXCEL_FILE_PATH
 from config.prompt import ALL_FIELDS
+
 
 def validate_excel_file(excel_file=EXCEL_FILE_PATH):
     """
@@ -33,8 +34,10 @@ def validate_excel_file(excel_file=EXCEL_FILE_PATH):
             dir_path = os.path.dirname(excel_file)
             if not os.path.exists(dir_path):
                 os.makedirs(dir_path)
-            
-            confirm = input(print_(f"Excel file not found at {excel_file}. Create it? (y/Y to confirm): ", color="YELLOW", return_text=True)).lower()
+
+            confirm = input(
+                print_(f"Excel file not found at {excel_file}. Create it? (y/Y to confirm): ", color="YELLOW",
+                       return_text=True)).lower()
             if confirm == 'y':
                 # Create new Excel file with required columns
                 create_new_excel()
@@ -42,33 +45,35 @@ def validate_excel_file(excel_file=EXCEL_FILE_PATH):
             else:
                 print_("Excel file creation cancelled.", "RED")
                 return False
-                
+
         # Check if all required columns exist
         wb = load_workbook(filename=excel_file)
         ws = wb.active
         existing_headers = [cell.value for cell in ws[1]]
         missing_headers = [header for header in ['Result'] + ALL_FIELDS if header not in existing_headers]
         wb.close()
-        
+
         if missing_headers:
             # Confirm to backup and create new file
-            confirm = input(print_(f"Missing columns: {missing_headers}. Backup and create new file? (y/Y to confirm): ", color="YELLOW", return_text=True)).lower()
+            confirm = input(
+                print_(f"Missing columns: {missing_headers}. Backup and create new file? (y/Y to confirm): ",
+                       color="YELLOW", return_text=True)).lower()
             if confirm != 'y':
                 print_("Validation failed.", "RED")
                 return False
-            
+
             # Backup existing file using shutil
             backup_path = f"{os.path.splitext(excel_file)[0]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_bak.xlsx"
             shutil.move(excel_file, backup_path)
             print_(f"Backed up existing file to {backup_path}", "YELLOW")
-            
+
             # Create new file with correct headers
             create_new_excel()
-            
+
             return True
-        
+
         return True
-        
+
     except Exception as e:
         print_(f"Error validating Excel file: {str(e)}", "RED")
         return False
@@ -119,7 +124,8 @@ def show_last_row(excel_file=EXCEL_FILE_PATH, delete=False):
 
         if delete:
             # Ask for user confirmation
-            confirm = input(print_("Delete this row? (y/Y to confirm, any other key to cancel): ", color="YELLOW", return_text=True)).lower()
+            confirm = input(print_("Delete this row? (y/Y to confirm, any other key to cancel): ", color="YELLOW",
+                                   return_text=True)).lower()
             if confirm == 'y':
                 sheet.delete_rows(last_row)
                 workbook.save(filename=excel_file)
@@ -135,7 +141,8 @@ def show_last_row(excel_file=EXCEL_FILE_PATH, delete=False):
 
 def search_applications(excel_file=EXCEL_FILE_PATH, search_term="", index=-1):
     """
-    Search for both company and job title matches
+    Search for both company and job title matches using vectorized pandas operations,
+    ensuring full compatibility with the original matching logic.
     
     Args:
         excel_file: Path to the Excel file
@@ -152,8 +159,8 @@ def search_applications(excel_file=EXCEL_FILE_PATH, search_term="", index=-1):
 
         def applied_date(row):
             raw = row.get('Applied Date', '')
-            raw = '' if str(raw).strip() == 'nan' else raw
-            return raw
+            # Handle pandas NaT (Not a Time) or numpy.nan
+            return '' if pd.isna(raw) else raw
 
         # If index is provided, directly return that record
         if index >= 2:  # Index 1 is header
@@ -174,41 +181,66 @@ def search_applications(excel_file=EXCEL_FILE_PATH, search_term="", index=-1):
                 print_(f"Index {index} is out of range.", "RED")
                 return []
 
-        # Convert DataFrame columns to string type
-        string_columns = ['Company', 'Job Title', 'Location']
-        for col in string_columns:
-            if col in df.columns:
-                df[col] = df[col].astype(str).apply(lambda x: x.strip() if x != 'nan' else '')
+        # 1. Prepare search term variations
+        search_term_clean = cleaned_string(search_term)
+        norm_keyword = normalize_company_name(search_term)
+        abbr_keyword = get_abbreviation_lower(norm_keyword)
+
+        # Ensure target columns are string type
+        df['Company'] = df['Company'].astype(str).fillna('')
+        df['Job Title'] = df['Job Title'].astype(str).fillna('')
+
+        # 2. Create helper columns using vectorized `apply`
+        df['norm_company'] = df['Company'].apply(normalize_company_name)
+        df['abbr_company'] = df['Company'].apply(get_abbreviation_lower)
+        df['clean_job_title'] = df['Job Title'].apply(cleaned_string).str.lower()
+
+        # 3. Build boolean masks that perfectly replicate the original function's logic
+
+        # Mask 1: Direct, Prefix, and Job Title matches
+        m_base = (
+                (df['norm_company'] == norm_keyword) |
+                (df['norm_company'].str.startswith(norm_keyword, na=False)) |
+                (df['clean_job_title'] == search_term_clean.lower())
+        )
+
+        # Mask 2: Handles "om" matching "Old Mission" (Abbreviation of DB entry matches the full keyword)
+        # This is the key logic that was previously broken. It is NOT gated by length.
+        m_abbr_target = (df['abbr_company'] == norm_keyword)
+
+        # Mask 3: Handles "GSK" matching "GlaxoSmithKline" (Abbreviation of keyword matches abbreviation of DB entry)
+        # This part IS gated by length to prevent single-letter false positives like 'd' matching 'Databricks'.
+        m_abbr_keyword_vs_abbr_target = pd.Series([False] * len(df), index=df.index)
+        if len(abbr_keyword) > 1:
+            m_abbr_keyword_vs_abbr_target = (df['abbr_company'] == abbr_keyword)
+
+        # 4. Combine all masks using logical OR
+        final_mask = m_base | m_abbr_target | m_abbr_keyword_vs_abbr_target
+
+        # 5. Filter the DataFrame and format results
+        matched_df = df[final_mask]
+
+        if matched_df.empty:
+            workbook.close()
+            return []
 
         matches = []
-
-        for index, row in df.iterrows():
-            # Check company name match
-            if is_company_match(search_term, row['Company']):
-                matches.append({
-                    'Company': row['Company'],
-                    'Location': row['Location'],
-                    'Job Title': row['Job Title'],
-                    'Applied Date': applied_date(row),
-                    'result': get_result_status(workbook, index + 2),
-                    'row_index': index + 2,  # Store the actual Excel row index (1-indexed, with header)
-                })
-            # Check exact job title match
-            elif is_job_title_match(search_term, row['Job Title']):
-                matches.append({
-                    'Company': row['Company'],
-                    'Location': row['Location'],
-                    'Job Title': row['Job Title'],
-                    'Applied Date': applied_date(row),
-                    'result': get_result_status(workbook, index + 2),
-                    'row_index': index + 2,  # Store the actual Excel row index (1-indexed, with header)
-                })
+        for idx, row in matched_df.iterrows():
+            excel_row_index = idx + 2  # Convert 0-based DataFrame index to 1-based Excel row index (with header)
+            matches.append({
+                'Company': row['Company'],
+                'Location': row['Location'],
+                'Job Title': row['Job Title'],
+                'Applied Date': applied_date(row.to_dict()),
+                'result': get_result_status(workbook, excel_row_index),
+                'row_index': excel_row_index,
+            })
 
         workbook.close()
         return matches
 
     except Exception as e:
-        print_(f"Error reading file: {str(e)}")
+        print_(f"Error during search: {str(e)}", "RED")
         return []
 
 
