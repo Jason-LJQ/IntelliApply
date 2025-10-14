@@ -1,3 +1,5 @@
+import re
+
 from openpyxl import load_workbook, Workbook
 import pandas as pd
 import os
@@ -182,7 +184,7 @@ def search_applications(excel_file=EXCEL_FILE_PATH, search_term="", index=-1):
                 return []
 
         # 1. Prepare search term variations
-        search_term_clean = cleaned_string(search_term)
+        search_term_clean_lower = cleaned_string(search_term).lower()
         norm_keyword = normalize_company_name(search_term)
         abbr_keyword = get_abbreviation_lower(norm_keyword)
 
@@ -195,13 +197,16 @@ def search_applications(excel_file=EXCEL_FILE_PATH, search_term="", index=-1):
         df['abbr_company'] = df['Company'].apply(get_abbreviation_lower)
         df['clean_job_title'] = df['Job Title'].apply(cleaned_string).str.lower()
 
+        # Create a regex pattern for word-level matching
+        job_title_pattern = r'\b' + re.escape(search_term_clean_lower) + r'\b'
+
         # 3. Build boolean masks that perfectly replicate the original function's logic
 
         # Mask 1: Direct, Prefix, and Job Title matches
         m_base = (
                 (df['norm_company'] == norm_keyword) |
                 (df['norm_company'].str.startswith(norm_keyword, na=False)) |
-                (df['clean_job_title'] == search_term_clean.lower())
+                (df['clean_job_title'].str.contains(job_title_pattern, na=False, regex=True))
         )
 
         # Mask 2: Handles "om" matching "Old Mission" (Abbreviation of DB entry matches the full keyword)
