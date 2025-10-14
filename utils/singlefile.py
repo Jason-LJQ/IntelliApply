@@ -4,18 +4,22 @@ import time
 import datetime
 import requests
 
-COOKIES_PATH = os.path.expanduser("~/.CanvasSync/cookie")
 # Use absolute path relative to the script file
 SINGLEFILE_BINARY_PATH = os.path.join(os.path.dirname(__file__), "node_modules", "single-file", "cli", "single-file")
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15"
 }
 CHROME_PATHS = [
-        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-        "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
-        "/Applications/Chromium.app/Contents/MacOS/Chromium",
-        # Add other paths if needed
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    # Windows paths
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files\\Google\\Chrome Canary\\Application\\chrome.exe",
+    "C:\\Program Files\\Chromium\\Application\\chrome.exe",
+    # Add other paths if needed
 ]
+
 
 def install_singlefile():
     """Installs single-file in the same directory as the script."""
@@ -29,6 +33,7 @@ def install_singlefile():
         print(f"Error installing single-file: {e}")
         exit(1)
 
+
 def set_chrome_path():
     # Check common paths for Chrome-based browsers
     for path in CHROME_PATHS:
@@ -36,10 +41,13 @@ def set_chrome_path():
             return path
     return ""
 
+
 CHROME_PATH = set_chrome_path()
+
 
 def addQuotes(str):
     return "\"" + str.strip("\"") + "\""
+
 
 def download_page(url, cookies_path, output_path, output_name_template="", timestamp=None):
     # Check if the URL is a PDF
@@ -72,16 +80,15 @@ def download_page(url, cookies_path, output_path, output_name_template="", times
         if not os.path.exists(SINGLEFILE_BINARY_PATH):
             install_singlefile()
 
-        if not cookies_path:
-            cookies_path = COOKIES_PATH
-
         args = [
             addQuotes(SINGLEFILE_BINARY_PATH),
             "--browser-executable-path=" + addQuotes(CHROME_PATH.strip("\"")),
-            "--browser-cookies-file=" + addQuotes(cookies_path),
             "--output-directory=" + addQuotes(output_path),
             addQuotes(url)
         ]
+
+        if cookies_path:
+            args.append("--browser-cookies-file=" + addQuotes(cookies_path))
 
         if output_name_template:
             args.append("--filename-template=" + addQuotes(output_name_template))
@@ -120,4 +127,4 @@ def download_page(url, cookies_path, output_path, output_name_template="", times
 
 if __name__ == "__main__":
     # Example usage
-    download_page("https://insights.sei.cmu.edu/documents/2088/2005_004_001_14546.pdf", "", "/Users/jason/Library/Caches", "", timestamp=1678886400)
+    download_page("https://google.com", "", "/Users/jason/Library/Caches", "", timestamp=1678886400)
