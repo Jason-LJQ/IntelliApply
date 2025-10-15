@@ -25,7 +25,7 @@ def validate_excel_file(excel_file=EXCEL_FILE_PATH):
     def create_new_excel():
         wb = Workbook()
         ws = wb.active
-        for col, field in enumerate(['Result'] + ALL_FIELDS, 1):
+        for col, field in enumerate(['Status'] + ALL_FIELDS, 1):
             ws.cell(row=1, column=col, value=field)
         wb.save(excel_file)
         print_(f"Created new Excel file at {excel_file}", "GREEN")
@@ -52,7 +52,7 @@ def validate_excel_file(excel_file=EXCEL_FILE_PATH):
         wb = load_workbook(filename=excel_file)
         ws = wb.active
         existing_headers = [cell.value for cell in ws[1]]
-        missing_headers = [header for header in ['Result'] + ALL_FIELDS if header not in existing_headers]
+        missing_headers = [header for header in ['Status'] + ALL_FIELDS if header not in existing_headers]
         wb.close()
 
         if missing_headers:
@@ -81,25 +81,35 @@ def validate_excel_file(excel_file=EXCEL_FILE_PATH):
         return False
 
 
-def get_result_status(workbook, row_index):
+def get_status_display(workbook, row_index):
     """
-    Checks if the 'Result' cell at the given row index has any fill color.
-    Returns 'x' if any fill color is found, otherwise returns an empty string.
+    Checks the 'Status' cell at the given row index for fill color.
+    Returns corresponding symbol based on color:
+    - Red (FFFF0000): '  ⨉  ' (rejected)
+    - Yellow (FFFFFF00): '  →  ' (processing)
+    - Green (FF00FF00): '  ✔  ' (offer)
+    - No color: '' (empty)
     """
     try:
         sheet = workbook.active
         headers = {cell.value: cell.column for cell in sheet[1]}
 
-        if 'Result' not in headers:
+        if 'Status' not in headers:
             return ''
 
-        result_cell = sheet.cell(row=row_index, column=headers['Result'])
+        status_cell = sheet.cell(row=row_index, column=headers['Status'])
 
-        # Check if the cell has any fill color
-        if result_cell.fill.start_color.rgb == '00000000':
-            return ''
-        else:
+        # Check cell fill color and return corresponding symbol
+        color_rgb = status_cell.fill.start_color.rgb
+        
+        if color_rgb == 'FFFF0000':  # Red
             return '  ⨉  '
+        elif color_rgb == 'FFFFFF00':  # Yellow
+            return '  →  '
+        elif color_rgb == 'FF00FF00':  # Green
+            return '  ✔  '
+        else:
+            return ''
 
     except Exception as e:
         print_(f"Error reading cell color: {str(e)}", "RED")
@@ -174,7 +184,9 @@ def search_applications(excel_file=EXCEL_FILE_PATH, search_term="", index=-1):
                     'Location': row['Location'],
                     'Job Title': row['Job Title'],
                     'Applied Date': applied_date(row),
-                    'result': get_result_status(workbook, index),
+                    'Processed Date': row.get('Processed Date', ''),
+                    'Result Date': row.get('Result Date', ''),
+                    'status': get_status_display(workbook, index),
                     'row_index': index,
                 }]
                 workbook.close()
@@ -237,7 +249,9 @@ def search_applications(excel_file=EXCEL_FILE_PATH, search_term="", index=-1):
                 'Location': row['Location'],
                 'Job Title': row['Job Title'],
                 'Applied Date': applied_date(row.to_dict()),
-                'result': get_result_status(workbook, excel_row_index),
+                'Processed Date': row.get('Processed Date', ''),
+                'Result Date': row.get('Result Date', ''),
+                'status': get_status_display(workbook, excel_row_index),
                 'row_index': excel_row_index,
             })
 
@@ -285,7 +299,7 @@ def append_data_to_excel(excel_file=EXCEL_FILE_PATH, data=None):
 
             # Write data to the corresponding columns
             for column in all_columns:
-                if column != 'Result':  # Skip Result column as it's handled separately
+                if column != 'Status':  # Skip Status column as it's handled separately
                     sheet.cell(row=last_row, column=headers[column],
                                value=row_data.get(column, ''))
 
@@ -331,8 +345,8 @@ def summary(excel_file=EXCEL_FILE_PATH):
     """
     Print a summary of job applications including:
     - Total number of applications
-    - Number of rejections
-    - Rejection percentage
+    - Number of rejections, processing, and offers
+    - Rejection, processing, and offer rates
     """
     try:
         workbook = load_workbook(filename=excel_file)
@@ -341,21 +355,34 @@ def summary(excel_file=EXCEL_FILE_PATH):
         # Get total number of applications (excluding header row)
         total_applications = sheet.max_row - 1
 
-        # Count rejections by checking cell fill color
+        # Count status by checking cell fill color
         rejections = 0
+        processing = 0
+        offers = 0
+        
         for row in range(2, sheet.max_row + 1):  # Start from row 2 to skip header
-            result = get_result_status(workbook, row)
-            if result.strip():  # If result has an 'x' mark
+            status = get_status_display(workbook, row)
+            if '⨉' in status:  # Rejected
                 rejections += 1
+            elif '→' in status:  # Processing
+                processing += 1
+            elif '✔' in status:  # Offer
+                offers += 1
 
-        # Calculate rejection percentage
-        rejection_percentage = (rejections / total_applications * 100) if total_applications > 0 else 0
+        # Calculate percentages
+        rejection_rate = (rejections / total_applications * 100) if total_applications > 0 else 0
+        processing_rate = (processing / total_applications * 100) if total_applications > 0 else 0
+        offer_rate = (offers / processing * 100) if processing > 0 else 0
 
         # Print summary with color formatting
         print_(f"\nApplication Summary:")
         print(f"Total Applications: {total_applications}")
-        print(f"Rejections: {rejections}")
-        print(f"Rejection Rate: {rejection_percentage:.1f}%")
+        print(f"Rejected: {rejections}")
+        print(f"Processing: {processing}")
+        print(f"Offers: {offers}")
+        print(f"Rejection Rate: {rejection_rate:.1f}%")
+        print(f"Processing Rate: {processing_rate:.1f}%")
+        print(f"Offer Rate: {offer_rate:.1f}% (offers/processing)")
 
         workbook.close()
 
@@ -385,14 +412,16 @@ def open_excel_file(excel_file=EXCEL_FILE_PATH):
     return True
 
 
-def mark_result(excel_file=EXCEL_FILE_PATH, row_index=None):
+def _mark_status(excel_file, row_index, status_color, date_column, status_name):
     """
-    Marks the 'Result' cell at the given row index with a red fill color.
-    Also creates a backup of the file in /tmp directory.
+    Internal helper function to mark status with a specific color and update date column.
     
     Args:
         excel_file: Path to the Excel file
         row_index: The row index to mark (1-indexed, including header row)
+        status_color: RGB color code (e.g., 'FFFF0000' for red)
+        date_column: Name of the date column to update ('Processed Date' or 'Result Date')
+        status_name: Name of the status for logging (e.g., 'rejected', 'processing', 'offer')
         
     Returns:
         True if successful, False otherwise
@@ -416,26 +445,80 @@ def mark_result(excel_file=EXCEL_FILE_PATH, row_index=None):
         workbook = load_workbook(filename=excel_file)
         sheet = workbook.active
 
-        # Find the Result column
+        # Find the Status and date columns
         headers = {cell.value: cell.column for cell in sheet[1]}
 
-        if 'Result' not in headers:
-            print_("'Result' column not found in the Excel file.", "RED")
-            workbook.close()
-            return False
+        if 'Status' not in headers:
+            raise ValueError("[DEBUG] 'Status' column not found in the Excel file.")
+            
 
-        # Mark the cell with red fill
-        result_cell = sheet.cell(row=row_index, column=headers['Result'])
-        red_fill = PatternFill(start_color="FFFF0000", end_color="FFFF0000", fill_type="solid")
-        result_cell.fill = red_fill
+        # Mark the Status cell with specified color
+        status_cell = sheet.cell(row=row_index, column=headers['Status'])
+        fill = PatternFill(start_color=status_color, end_color=status_color, fill_type="solid")
+        status_cell.fill = fill
+
+        # Update date column
+        if date_column in headers:
+            date_cell = sheet.cell(row=row_index, column=headers[date_column])
+            date_cell.value = datetime.now().strftime('%Y-%m-%d')
+        else:
+            raise ValueError(f"[DEBUG] {date_column} column not found in the Excel file.")
 
         # Save the workbook
         workbook.save(filename=excel_file)
         workbook.close()
 
-        print_(f"Row {row_index - 1} marked as rejected.", "GREEN")
+        print_(f"Row {row_index - 1} marked as {status_name}.", "GREEN")
         return True
 
     except Exception as e:
-        print_(f"Error marking result: {str(e)}", "RED")
+        print_(f"Error marking as {status_name}: {str(e)}", "RED")
         return False
+
+
+def mark_as_rejected(excel_file=EXCEL_FILE_PATH, row_index=None):
+    """
+    Marks the 'Status' cell at the given row index with a red fill color.
+    Updates the 'Result Date' column with current date.
+    Also creates a backup of the file in /tmp directory.
+    
+    Args:
+        excel_file: Path to the Excel file
+        row_index: The row index to mark (1-indexed, including header row)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    return _mark_status(excel_file, row_index, "FFFF0000", "Result Date", "REJECTED")
+
+
+def mark_as_processing(excel_file=EXCEL_FILE_PATH, row_index=None):
+    """
+    Marks the 'Status' cell at the given row index with a yellow fill color.
+    Updates the 'Processed Date' column with current date.
+    Also creates a backup of the file in /tmp directory.
+    
+    Args:
+        excel_file: Path to the Excel file
+        row_index: The row index to mark (1-indexed, including header row)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    return _mark_status(excel_file, row_index, "FFFFFF00", "Processed Date", "PROCESSING")
+
+
+def mark_as_offer(excel_file=EXCEL_FILE_PATH, row_index=None):
+    """
+    Marks the 'Status' cell at the given row index with a green fill color.
+    Updates the 'Result Date' column with current date.
+    Also creates a backup of the file in /tmp directory.
+    
+    Args:
+        excel_file: Path to the Excel file
+        row_index: The row index to mark (1-indexed, including header row)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    return _mark_status(excel_file, row_index, "FF00FF00", "Result Date", "OFFER")

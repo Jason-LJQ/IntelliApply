@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
 REQUIRED_FIELDS = ["Company", "Location", "Job Title"]
-ALL_FIELDS = REQUIRED_FIELDS + ["Code", "Type", "Applied Date","Link"]
+ALL_FIELDS = REQUIRED_FIELDS + ["Code", "Type", "Applied Date", "Processed Date", "Result Date", "Link"]
 
 # OpenAI system prompt for job information extraction
 SYSTEM_PROMPT = """

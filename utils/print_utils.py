@@ -45,7 +45,7 @@ def auto_adjust_terminal_width(required_width):
 
 def print_results(results, mark_mode=False):
     """
-    Prints the search results, including the 'Result' column with 'x' for colored cells.
+    Prints the search results, including the 'Status' column with symbols for colored cells.
     If mark_mode is True, adds a numbered index column for selection.
     """
     if not results:
@@ -54,7 +54,7 @@ def print_results(results, mark_mode=False):
 
     print_(f"Found {len(results)} matching records:", "GREEN")
 
-    # Calculate maximum widths for each column, including 'Result'
+    # Calculate maximum widths for each column, including 'Status'
     company_width = max(len(format_string(r['Company'], limit=30)) for r in results)
     company_width = max(company_width, len("Company"))
 
@@ -64,8 +64,8 @@ def print_results(results, mark_mode=False):
     job_width = max(len(format_string(r['Job Title'], limit=65)) for r in results)
     job_width = max(job_width, len("Job Title"))
 
-    result_width = max(len(str(r.get('result', ''))) for r in results)
-    result_width = max(result_width, len("Result"))
+    status_width = max(len(str(r.get('status', ''))) for r in results)
+    status_width = max(status_width, len("Status"))
 
     # Width for the index column in mark mode
     index_width = len(str(len(results))) + 1 if mark_mode else 0
@@ -81,50 +81,50 @@ def print_results(results, mark_mode=False):
 
         if mark_mode:
             header = "{:<{width0}}  {:<{width5}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
-                "No.", "Applied Date", "Result", "Company", "Location", "Job Title",
+                "No.", "Applied Date", "Status", "Company", "Location", "Job Title",
                 width0=index_width,
                 width5=date_width,
-                width1=result_width,
+                width1=status_width,
                 width2=company_width,
                 width3=location_width,
                 width4=job_width
             )
-            separator = "-" * (company_width + location_width + job_width + result_width + date_width + index_width + 10)
+            separator = "-" * (company_width + location_width + job_width + status_width + date_width + index_width + 10)
         else:
             header = "{:<{width5}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
-                "Applied Date", "Result", "Company", "Location", "Job Title",
+                "Applied Date", "Status", "Company", "Location", "Job Title",
                 width5=date_width,
-                width1=result_width,
+                width1=status_width,
                 width2=company_width,
                 width3=location_width,
                 width4=job_width
             )
-            separator = "-" * (company_width + location_width + job_width + result_width + date_width + 8)
+            separator = "-" * (company_width + location_width + job_width + status_width + date_width + 8)
     else:
         if mark_mode:
             header = "{:<{width0}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
-                "No.", "Result", "Company", "Location", "Job Title",
+                "No.", "Status", "Company", "Location", "Job Title",
                 width0=index_width,
-                width1=result_width,
+                width1=status_width,
                 width2=company_width,
                 width3=location_width,
                 width4=job_width
             )
-            separator = "-" * (company_width + location_width + job_width + result_width + index_width + 8)
+            separator = "-" * (company_width + location_width + job_width + status_width + index_width + 8)
         else:
             header = "{:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
-                "Result", "Company", "Location", "Job Title",
-                width1=result_width,
+                "Status", "Company", "Location", "Job Title",
+                width1=status_width,
                 width2=company_width,
                 width3=location_width,
                 width4=job_width
             )
-            separator = "-" * (company_width + location_width + job_width + result_width + 6)
+            separator = "-" * (company_width + location_width + job_width + status_width + 6)
 
     # Collect all lines and track max length
     lines = ["\n" + header, separator]
     max_line_length = max(len(header), len(separator))
-    
+
     # Generate data rows
     for i, result in enumerate(results, 1):
         if has_valid_date:
@@ -132,13 +132,13 @@ def print_results(results, mark_mode=False):
                 line = "{:<{width0}}  {:<{width5}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
                     str(i),
                     str(result.get('Applied Date', '')),
-                    str(result['result']),
+                    str(result['status']),
                     format_string(result['Company'], limit=30),
                     format_string(result['Location']),
                     format_string(result['Job Title'], limit=65),
                     width0=index_width,
                     width5=date_width,
-                    width1=result_width,
+                    width1=status_width,
                     width2=company_width,
                     width3=location_width,
                     width4=job_width
@@ -146,12 +146,12 @@ def print_results(results, mark_mode=False):
             else:
                 line = "{:<{width5}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
                     str(result.get('Applied Date', '')),
-                    str(result['result']),
+                    str(result['status']),
                     format_string(result['Company'], limit=30),
                     format_string(result['Location']),
                     format_string(result['Job Title'], limit=65),
                     width5=date_width,
-                    width1=result_width,
+                    width1=status_width,
                     width2=company_width,
                     width3=location_width,
                     width4=job_width
@@ -160,31 +160,31 @@ def print_results(results, mark_mode=False):
             if mark_mode:
                 line = "{:<{width0}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
                     str(i),
-                    str(result['result']),
+                    str(result['status']),
                     format_string(result['Company'], limit=30),
                     format_string(result['Location']),
                     format_string(result['Job Title'], limit=65),
                     width0=index_width,
-                    width1=result_width,
+                    width1=status_width,
                     width2=company_width,
                     width3=location_width,
                     width4=job_width
                 )
             else:
                 line = "{:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
-                    str(result['result']),
+                    str(result['status']),
                     format_string(result['Company'], limit=30),
                     format_string(result['Location']),
                     format_string(result['Job Title'], limit=65),
-                    width1=result_width,
+                    width1=status_width,
                     width2=company_width,
                     width3=location_width,
                     width4=job_width
                 )
-        
+
         max_line_length = max(max_line_length, len(line))
         lines.append(line)
-    
+
     # Auto-adjust terminal width then print everything at once
     auto_adjust_terminal_width(max_line_length)
     print('\n'.join(lines))
@@ -201,7 +201,7 @@ def print_(text="", color=None, return_text=False):
         while text.startswith('\n'):
             print()  # Print empty line
             text = text[1:]  # Remove the leading newline
-    
+
     formatted_text = ""
 
     if not color or color not in COLOR:

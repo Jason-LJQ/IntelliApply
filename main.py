@@ -11,9 +11,10 @@ import sys
 
 from utils.string_utils import is_markdown_table, parse_markdown_table, is_json
 from utils.excel_utils import summary, open_excel_file, show_last_row, append_data_to_excel, search_applications, \
-    mark_result, validate_excel_file
+    mark_as_rejected, mark_as_processing, mark_as_offer, validate_excel_file
 from utils.print_utils import print_, print_results
-from utils.web_utils import save_cookie, validate_cookie, handle_webpage_content, start_browser, add_cookie, handle_json_content, get_backup_directory
+from utils.web_utils import save_cookie, validate_cookie, handle_webpage_content, start_browser, add_cookie, \
+    handle_json_content, get_backup_directory
 
 exit_flag = False
 
@@ -72,7 +73,7 @@ def main():
     if not validate_excel_file():
         print_("Excel file is invalid. Please check the file.", "RED")
         return
-    
+
     # Validate job snapshot folder
     if not get_backup_directory():
         print_("Job snapshot folder is invalid. The website will not be backed up to local storage.", "RED")
@@ -91,7 +92,7 @@ def main():
             prompt += ("Search with keywords or initials, Add new record by one-line JSON data / URL / webpage content "
                        "(wrapped with '< >' or '```'), \nEnter ")
             if last_results:
-                prompt += "a number to mark rejection, "
+                prompt += "number+action (e.g. 1r=line 1 as reject, 2p=line 2 as processing, 3o=line 3 as offer), "
             prompt += "'delete' to delete last record, 'cookie' to update cookie, 'summary' to view statistics, "
             prompt += "'open' to open Excel file, (or 'exit' to quit):"
 
@@ -190,24 +191,62 @@ def main():
                 print_("Search keyword cannot be empty!", "RED")
                 continue
 
-            if last_results and user_input.strip().isdigit():
-                selection = int(user_input.strip())
-                if 1 <= selection <= len(last_results):
-                    row_data = last_results[selection - 1]
-                    print_(f"\nYou are about to mark the following record:", "YELLOW")
-                    print_results([row_data])
-                    confirm = input(print_("Confirm? (y/N): ", color="YELLOW", return_text=True)).strip().lower()
-                    if confirm == 'y':
-                        row_index = row_data['row_index']
-                        mark_result(row_index=row_index)
-                        print_(f"Updated record:")
-                        print_results(search_applications(index=row_index))
-                    else:
-                        print_("Operation cancelled.", "RED")
+            # Check for marking command: <number><action> (e.g., 1r, 2p, 3o)
+            import re
+            mark_match = re.match(r'^(\d+)([a-z])$', user_input.strip().lower())
+
+            if last_results and mark_match:
+                selection = int(mark_match.group(1))
+                action = mark_match.group(2)
+
+                # Validate action letter
+                if action not in ['r', 'p', 'o']:
+                    print_(f"Invalid action '{action}'. Valid actions are:", "RED")
+                    print("  r - mark as REJECTED")
+                    print("  p - mark as PROCESSING")
+                    print("  o - mark as OFFER")
+                    print_(
+                        f"Example: 1r (mark line 1 as rejected), 2p (mark line 2 as processing), 3o (mark line 3 as offer)",
+                        "YELLOW")
+                    continue
+
+                # Validate selection number
+                if selection < 1 or selection > len(last_results):
+                    print_(f"Invalid line number {selection}. Please enter a number between 1 and {len(last_results)}.",
+                           "RED")
+                    print_(f"Tip: Use the line number shown in the search results (No. column)", "YELLOW")
+                    continue
+
+                # Process valid marking command
+                row_data = last_results[selection - 1]
+                company = row_data['Company']
+                job_title = row_data['Job Title']
+
+                # Determine action type and confirmation message
+                if action == 'r':
+                    action_text = "REJECTED"
+                    mark_func = mark_as_rejected
+                elif action == 'p':
+                    action_text = "PROCESSING"
+                    mark_func = mark_as_processing
+                elif action == 'o':
+                    action_text = "OFFER"
+                    mark_func = mark_as_offer
+
+                # Show confirmation prompt
+                print_(f"\nDo you want to mark \"{job_title}\" at \"{company}\" as {action_text}?", "YELLOW")
+                print_results([row_data])
+                confirm = input(print_("Confirm? (y/N): ", color="YELLOW", return_text=True)).strip().lower()
+
+                if confirm == 'y':
+                    row_index = row_data['row_index']
+                    mark_func(row_index=row_index)
+                    print_(f"Updated record:")
+                    print_results(search_applications(index=row_index))
                     last_results = None
                     continue
                 else:
-                    print_(f"Invalid selection. Please enter a number between 1 and {len(last_results)}.", "RED")
+                    print_("Operation cancelled.", "RED")
                     continue
 
             if is_markdown_table(user_input):
