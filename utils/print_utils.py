@@ -1,7 +1,46 @@
 from utils.string_utils import format_string
+import os
 
 # Color constants
 COLOR = {"RED": '\033[31m', "GREEN": '\033[32m', "YELLOW": '\033[33m', "RESET": '\033[0m'}
+
+
+def get_terminal_width():
+    """
+    Get current terminal width
+    """
+    try:
+        cols = os.popen('stty size').read().split()[1]
+        return int(cols)
+    except (IndexError, OSError, ValueError):
+        return 80  # Default fallback width
+
+
+def resize_width(cols):
+    """
+    Resize terminal width while keeping the current height (macOS only)
+    """
+    try:
+        # Get current terminal size
+        rows = os.popen('stty size').read().split()[0]
+        # Set new width while keeping current height
+        os.system(f"printf '\\e[8;{rows};{cols}t'")
+    except (IndexError, OSError):
+        # Silently ignore if terminal doesn't support resizing
+        pass
+
+
+def auto_adjust_terminal_width(required_width):
+    """
+    Auto-adjust terminal width if required width is larger than current width
+    Only increases width, never decreases
+    """
+    current_width = get_terminal_width()
+    if required_width > current_width:
+        # No padding - use exact required width
+        resize_width(required_width)
+        return required_width
+    return current_width
 
 
 def print_results(results, mark_mode=False):
@@ -31,16 +70,17 @@ def print_results(results, mark_mode=False):
     # Width for the index column in mark mode
     index_width = len(str(len(results))) + 1 if mark_mode else 0
 
+    # Generate header
+    header, separator = "", ""
+
     # Check if any Applied Date is valid
     has_valid_date = any(str(r.get('Applied Date', '')).strip() != '' for r in results)
     if has_valid_date:
         date_width = max(len(str(r.get('Applied Date', ''))) for r in results)
         date_width = max(date_width, len("Applied Date"))
 
-    # Print header, including 'Result' and 'Applied Date' if valid
-    if has_valid_date:
         if mark_mode:
-            print("\n{:<{width0}}  {:<{width5}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
+            header = "{:<{width0}}  {:<{width5}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
                 "No.", "Applied Date", "Result", "Company", "Location", "Job Title",
                 width0=index_width,
                 width5=date_width,
@@ -48,44 +88,48 @@ def print_results(results, mark_mode=False):
                 width2=company_width,
                 width3=location_width,
                 width4=job_width
-            ))
-            print("-" * (company_width + location_width + job_width + result_width + date_width + index_width + 10))
+            )
+            separator = "-" * (company_width + location_width + job_width + result_width + date_width + index_width + 10)
         else:
-            print("\n{:<{width5}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
+            header = "{:<{width5}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
                 "Applied Date", "Result", "Company", "Location", "Job Title",
                 width5=date_width,
                 width1=result_width,
                 width2=company_width,
                 width3=location_width,
                 width4=job_width
-            ))
-            print("-" * (company_width + location_width + job_width + result_width + date_width + 8))
+            )
+            separator = "-" * (company_width + location_width + job_width + result_width + date_width + 8)
     else:
         if mark_mode:
-            print("\n{:<{width0}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
+            header = "{:<{width0}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
                 "No.", "Result", "Company", "Location", "Job Title",
                 width0=index_width,
                 width1=result_width,
                 width2=company_width,
                 width3=location_width,
                 width4=job_width
-            ))
-            print("-" * (company_width + location_width + job_width + result_width + index_width + 8))
+            )
+            separator = "-" * (company_width + location_width + job_width + result_width + index_width + 8)
         else:
-            print("\n{:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
+            header = "{:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
                 "Result", "Company", "Location", "Job Title",
                 width1=result_width,
                 width2=company_width,
                 width3=location_width,
                 width4=job_width
-            ))
-            print("-" * (company_width + location_width + job_width + result_width + 6))
+            )
+            separator = "-" * (company_width + location_width + job_width + result_width + 6)
 
-    # Print results
+    # Collect all lines and track max length
+    lines = ["\n" + header, separator]
+    max_line_length = max(len(header), len(separator))
+    
+    # Generate data rows
     for i, result in enumerate(results, 1):
         if has_valid_date:
             if mark_mode:
-                print("{:<{width0}}  {:<{width5}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
+                line = "{:<{width0}}  {:<{width5}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
                     str(i),
                     str(result.get('Applied Date', '')),
                     str(result['result']),
@@ -98,9 +142,9 @@ def print_results(results, mark_mode=False):
                     width2=company_width,
                     width3=location_width,
                     width4=job_width
-                ))
+                )
             else:
-                print("{:<{width5}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
+                line = "{:<{width5}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
                     str(result.get('Applied Date', '')),
                     str(result['result']),
                     format_string(result['Company'], limit=30),
@@ -111,10 +155,10 @@ def print_results(results, mark_mode=False):
                     width2=company_width,
                     width3=location_width,
                     width4=job_width
-                ))
+                )
         else:
             if mark_mode:
-                print("{:<{width0}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
+                line = "{:<{width0}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
                     str(i),
                     str(result['result']),
                     format_string(result['Company'], limit=30),
@@ -125,9 +169,9 @@ def print_results(results, mark_mode=False):
                     width2=company_width,
                     width3=location_width,
                     width4=job_width
-                ))
+                )
             else:
-                print("{:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
+                line = "{:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
                     str(result['result']),
                     format_string(result['Company'], limit=30),
                     format_string(result['Location']),
@@ -136,7 +180,14 @@ def print_results(results, mark_mode=False):
                     width2=company_width,
                     width3=location_width,
                     width4=job_width
-                ))
+                )
+        
+        max_line_length = max(max_line_length, len(line))
+        lines.append(line)
+    
+    # Auto-adjust terminal width then print everything at once
+    auto_adjust_terminal_width(max_line_length)
+    print('\n'.join(lines))
 
 
 def print_(text="", color=None, return_text=False):
