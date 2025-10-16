@@ -2,7 +2,16 @@ from utils.string_utils import format_string
 import os
 
 # Color constants
-COLOR = {"RED": '\033[31m', "GREEN": '\033[32m', "YELLOW": '\033[33m', "RESET": '\033[0m'}
+COLOR = {
+    "RED": '\033[31m',
+    "GREEN": '\033[32m',
+    "YELLOW": '\033[33m',
+    "BLUE": '\033[34m',
+    "BOLD": '\033[1m',
+    "ITALIC": '\033[3m',
+    "BOLD_ITALIC": '\033[1;3m',
+    "RESET": '\033[0m'
+}
 
 
 def get_terminal_width():
@@ -89,7 +98,8 @@ def print_results(results, mark_mode=False):
                 width3=location_width,
                 width4=job_width
             )
-            separator = "-" * (company_width + location_width + job_width + status_width + date_width + index_width + 10)
+            separator = "-" * (
+                        company_width + location_width + job_width + status_width + date_width + index_width + 10)
         else:
             header = "{:<{width5}}  {:<{width1}}  {:<{width2}}  {:<{width3}}  {:<{width4}}".format(
                 "Applied Date", "Status", "Company", "Location", "Job Title",

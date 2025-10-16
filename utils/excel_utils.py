@@ -38,7 +38,7 @@ def validate_excel_file(excel_file=EXCEL_FILE_PATH):
                 os.makedirs(dir_path)
 
             confirm = input(
-                print_(f"Excel file not found at {excel_file}. Create it? (y/Y to confirm): ", color="YELLOW",
+                print_(f"Excel file not found at {excel_file}. Create it? (y/Y to confirm): ", color="BLUE",
                        return_text=True)).lower()
             if confirm == 'y':
                 # Create new Excel file with required columns
@@ -59,7 +59,7 @@ def validate_excel_file(excel_file=EXCEL_FILE_PATH):
             # Confirm to backup and create new file
             confirm = input(
                 print_(f"Missing columns: {missing_headers}. Backup and create new file? (y/Y to confirm): ",
-                       color="YELLOW", return_text=True)).lower()
+                       color="BLUE", return_text=True)).lower()
             if confirm != 'y':
                 print_("Validation failed.", "RED")
                 return False
@@ -136,7 +136,7 @@ def show_last_row(excel_file=EXCEL_FILE_PATH, delete=False):
 
         if delete:
             # Ask for user confirmation
-            confirm = input(print_("Delete this row? (y/Y to confirm, any other key to cancel): ", color="YELLOW",
+            confirm = input(print_("Delete this row? (y/Y to confirm, any other key to cancel): ", color="BLUE",
                                    return_text=True)).lower()
             if confirm == 'y':
                 sheet.delete_rows(last_row)

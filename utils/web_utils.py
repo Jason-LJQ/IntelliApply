@@ -463,7 +463,7 @@ def handle_duplicate_check(data):
         try:
             print_("Warning: This job entry already exists in the Excel file.", "RED")
             print(f"Duplicate Entry: {duplicate_entry}")
-            confirm = input(print_("[*] Add it anyway? (y/yes to confirm, any other key to cancel): ", color="YELLOW",
+            confirm = input(print_("[*] Add it anyway? (y/yes to confirm, any other key to cancel): ", color="BLUE",
                                    return_text=True)).lower()
             if confirm.lower() != 'y' and confirm.lower() != 'yes':
                 raise KeyboardInterrupt

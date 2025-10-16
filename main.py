@@ -12,7 +12,7 @@ import sys
 from utils.string_utils import is_markdown_table, parse_markdown_table, is_json
 from utils.excel_utils import summary, open_excel_file, show_last_row, append_data_to_excel, search_applications, \
     mark_as_rejected, mark_as_processing, mark_as_offer, validate_excel_file
-from utils.print_utils import print_, print_results
+from utils.print_utils import print_, print_results, COLOR
 from utils.web_utils import save_cookie, validate_cookie, handle_webpage_content, start_browser, add_cookie, \
     handle_json_content, get_backup_directory
 
@@ -62,6 +62,13 @@ def detect_ending(min_threshold=0.05, max_threshold=0.5):
         return '', True
 
 
+DEFAULT_PROMPT = f"""Search: Enter keywords or initials
+Add new record: Enter one-line JSON data / URL / webpage content (wrapped with '< >' or '```')
+Other commands: {COLOR['BOLD_ITALIC']}delete{COLOR['RESET']} last record, update {COLOR['BOLD_ITALIC']}cookie{COLOR['RESET']}, view statistics {COLOR['BOLD_ITALIC']}summary{COLOR['RESET']}, {COLOR['BOLD_ITALIC']}open{COLOR['RESET']} Excel file, {COLOR['BOLD_ITALIC']}exit{COLOR['RESET']} tool"""
+
+UPDATE_PROMPT = f"""Update status: Enter number+action (e.g. 1r=line 1 as reject, 2p=line 2 as processing, 3o=line 3 as offer)"""
+
+
 def main():
     # Set up signal handler for SIGINT
     signal.signal(signal.SIGINT, signal_handler)
@@ -88,14 +95,9 @@ def main():
 
         while True:
             print("\n" + "-" * 100)
-            prompt = ""
-            prompt += ("Search with keywords or initials, Add new record by one-line JSON data / URL / webpage content "
-                       "(wrapped with '< >' or '```'), \nEnter ")
+            prompt = DEFAULT_PROMPT
             if last_results:
-                prompt += "number+action (e.g. 1r=line 1 as reject, 2p=line 2 as processing, 3o=line 3 as offer), \n"
-            prompt += "'delete' to delete last record, 'cookie' to update cookie, 'summary' to view statistics, "
-            prompt += "'open' to open Excel file, (or 'exit' to quit):"
-
+                prompt += "\n" + UPDATE_PROMPT
             print_(prompt)
 
             user_input_lines = []
@@ -238,12 +240,10 @@ def main():
 
                 # Show confirmation prompt with color formatting
                 from utils.print_utils import COLOR
-                reset = COLOR["RESET"]
-                yellow = COLOR["YELLOW"]
-                action_text_colored = f"{COLOR[action_color]}{action_text}{yellow}"
-                print_(f"\nDo you want to mark \"{reset}{job_title}{yellow}\" at \"{reset}{company}{yellow}\" as {action_text_colored}?", "YELLOW")
+                action_text_colored = f"{COLOR[action_color]}{action_text}{COLOR["BLUE"]}"
+                print_(f"\nDo you want to mark {COLOR["RESET"]}{job_title}{COLOR["BLUE"]} at {COLOR["RESET"]}{company}{COLOR["BLUE"]} as {action_text_colored}?","BLUE")
                 print_results([row_data])
-                confirm = input(print_("Confirm? (y/N): ", color="YELLOW", return_text=True)).strip().lower()
+                confirm = input(print_("Confirm? (y/N): ", color="BLUE", return_text=True)).strip().lower()
 
                 if confirm == 'y':
                     row_index = row_data['row_index']
