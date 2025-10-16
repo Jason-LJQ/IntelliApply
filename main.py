@@ -92,7 +92,7 @@ def main():
             prompt += ("Search with keywords or initials, Add new record by one-line JSON data / URL / webpage content "
                        "(wrapped with '< >' or '```'), \nEnter ")
             if last_results:
-                prompt += "number+action (e.g. 1r=line 1 as reject, 2p=line 2 as processing, 3o=line 3 as offer), "
+                prompt += "number+action (e.g. 1r=line 1 as reject, 2p=line 2 as processing, 3o=line 3 as offer), \n"
             prompt += "'delete' to delete last record, 'cookie' to update cookie, 'summary' to view statistics, "
             prompt += "'open' to open Excel file, (or 'exit' to quit):"
 
@@ -191,18 +191,18 @@ def main():
                 print_("Search keyword cannot be empty!", "RED")
                 continue
 
-            # Check for marking command: <number><action> (e.g., 1r, 2p, 3o)
+            # Check for marking command: <number><action> (e.g., 1r, 2p, 3o) or pure number (e.g., 1 = 1r)
             import re
-            mark_match = re.match(r'^(\d+)([a-z])$', user_input.strip().lower())
+            mark_match = re.match(r'^(\d+)([a-z]?)$', user_input.strip().lower())
 
             if last_results and mark_match:
                 selection = int(mark_match.group(1))
-                action = mark_match.group(2)
+                action = mark_match.group(2) or 'r'  # Default to 'r' (rejected) if no action specified
 
                 # Validate action letter
                 if action not in ['r', 'p', 'o']:
                     print_(f"Invalid action '{action}'. Valid actions are:", "RED")
-                    print("  r - mark as REJECTED")
+                    print("  r - mark as REJECTED (default if number only)")
                     print("  p - mark as PROCESSING")
                     print("  o - mark as OFFER")
                     print_(
@@ -225,16 +225,23 @@ def main():
                 # Determine action type and confirmation message
                 if action == 'r':
                     action_text = "REJECTED"
+                    action_color = "RED"
                     mark_func = mark_as_rejected
                 elif action == 'p':
                     action_text = "PROCESSING"
+                    action_color = "YELLOW"
                     mark_func = mark_as_processing
                 elif action == 'o':
                     action_text = "OFFER"
+                    action_color = "GREEN"
                     mark_func = mark_as_offer
 
-                # Show confirmation prompt
-                print_(f"\nDo you want to mark \"{job_title}\" at \"{company}\" as {action_text}?", "YELLOW")
+                # Show confirmation prompt with color formatting
+                from utils.print_utils import COLOR
+                reset = COLOR["RESET"]
+                yellow = COLOR["YELLOW"]
+                action_text_colored = f"{COLOR[action_color]}{action_text}{yellow}"
+                print_(f"\nDo you want to mark \"{reset}{job_title}{yellow}\" at \"{reset}{company}{yellow}\" as {action_text_colored}?", "YELLOW")
                 print_results([row_data])
                 confirm = input(print_("Confirm? (y/N): ", color="YELLOW", return_text=True)).strip().lower()
 
