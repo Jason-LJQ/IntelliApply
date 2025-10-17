@@ -299,3 +299,12 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
+# Cursor
+.cursor/
+
+# Claude
+CLAUDE.md
+
+# Temp rules
+package-lock.json
+uv.lock

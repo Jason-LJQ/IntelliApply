@@ -10,8 +10,7 @@ import signal
 import sys
 
 from utils.string_utils import is_markdown_table, parse_markdown_table, is_json
-from utils.excel_utils import summary, open_excel_file, show_last_row, append_data_to_excel, search_applications, \
-    mark_as_rejected, mark_as_processing, mark_as_offer, validate_excel_file
+from utils.excel_utils import ExcelManager
 from utils.print_utils import print_, print_results, COLOR
 from utils.web_utils import save_cookie, validate_cookie, handle_webpage_content, start_browser, add_cookie, \
     handle_json_content, get_backup_directory
@@ -76,10 +75,8 @@ def main():
     # Clear the console
     os.system('cls' if os.name == 'nt' else 'clear')
 
-    # Validate Excel file
-    if not validate_excel_file():
-        print_("Excel file is invalid. Please check the file.", "RED")
-        return
+    # Initialize ExcelManager instance
+    excel_manager = ExcelManager()
 
     # Validate job snapshot folder
     if not get_backup_directory():
@@ -138,7 +135,7 @@ def main():
                 print("|" + "-" * 99)
                 print_("Webpage content detected. Processing ...")
                 content = '\n'.join(user_input_lines)
-                handle_webpage_content(content)
+                handle_webpage_content(content, excel_manager)
                 last_results = None
                 continue
 
@@ -151,7 +148,7 @@ def main():
                 break
 
             if user_input.strip().lower() == 'summary':
-                summary()
+                excel_manager.summary()
                 last_results = None
                 continue
 
@@ -161,20 +158,21 @@ def main():
                 continue
 
             if user_input.strip().lower() == 'open':
-                open_excel_file()
+                excel_manager.open_excel_file()
+                excel_manager.invalidate_cache()
                 last_results = None
                 continue
 
             if user_input.strip().lower() == 'delete':
                 try:
-                    show_last_row(delete=True)
+                    excel_manager.show_last_row(delete=True)
                 except KeyboardInterrupt:
                     print_('\nDeletion cancelled. Send SIGINT again to exit.')
                 last_results = None
                 continue
 
             if user_input.strip().lower() == 'last':
-                show_last_row(delete=False)
+                excel_manager.show_last_row(delete=False)
                 last_results = None
                 continue
 
@@ -228,15 +226,15 @@ def main():
                 if action == 'r':
                     action_text = "REJECTED"
                     action_color = "RED"
-                    mark_func = mark_as_rejected
+                    mark_func = excel_manager.mark_as_rejected
                 elif action == 'p':
                     action_text = "PROCESSING"
                     action_color = "YELLOW"
-                    mark_func = mark_as_processing
+                    mark_func = excel_manager.mark_as_processing
                 elif action == 'o':
                     action_text = "OFFER"
                     action_color = "GREEN"
-                    mark_func = mark_as_offer
+                    mark_func = excel_manager.mark_as_offer
 
                 # Show confirmation prompt with color formatting
                 from utils.print_utils import COLOR
@@ -249,7 +247,7 @@ def main():
                     row_index = row_data['row_index']
                     mark_func(row_index=row_index)
                     print_(f"Updated record:")
-                    print_results(search_applications(index=row_index))
+                    print_results(excel_manager.search_applications(index=row_index))
                     last_results = None
                     continue
                 else:
@@ -265,19 +263,19 @@ def main():
                     continue
 
                 # Append the data to the Excel file
-                append_data_to_excel(data=data)
+                excel_manager.append_data_to_excel(data=data)
                 print_(f"New record successfully appended to Excel file.", "GREEN")
                 last_results = None
 
             elif is_json(user_input):
                 # Handle JSON input
                 print_("JSON content detected. Processing ...")
-                handle_json_content(user_input)
+                handle_json_content(user_input, excel_manager)
                 last_results = None
                 continue
 
             else:
-                results = search_applications(search_term=user_input)
+                results = excel_manager.search_applications(search_term=user_input)
                 if results:
                     last_results = results
                     print_results(results, mark_mode=True)

@@ -12,7 +12,6 @@ from playwright.sync_api import sync_playwright
 
 from config.config import DOMAIN_KEYWORDS, COOKIE_PATH, HEADERS
 from config.prompt import SYSTEM_PROMPT, JobInfo, REQUIRED_FIELDS
-from utils.excel_utils import check_duplicate_entry, append_data_to_excel
 from config.credential import API_KEY_LIST, BASE_URL, MODEL_LIST, REASONING_EFFORT, BACKUP_FOLDER_PATH
 from utils.print_utils import print_
 from utils.string_utils import parse_json_safe
@@ -448,17 +447,18 @@ def prepare_excel_data(result):
     }
 
 
-def handle_duplicate_check(data):
+def handle_duplicate_check(data, excel_manager):
     """
     Handle duplicate entry checking with user confirmation.
-    
+
     Args:
         data: Excel data dictionary
-    
+        excel_manager: ExcelManager instance
+
     Returns:
         bool: True if should proceed, False if cancelled
     """
-    duplicate_entry = check_duplicate_entry(new_data=data)
+    duplicate_entry = excel_manager.check_duplicate_entry(new_data=data)
     if duplicate_entry is not None:
         try:
             print_("Warning: This job entry already exists in the Excel file.", "RED")
@@ -489,35 +489,40 @@ def display_job_result(data):
     print(f"Link: {data['Link']}")
 
 
-def process_validated_job_data(result, source="LLM Backend"):
+def process_validated_job_data(result, excel_manager, source="LLM Backend"):
     """
     Process validated job data: prepare for Excel, check duplicates, and save.
-    
+
     Args:
         result: Validated job data dictionary
+        excel_manager: ExcelManager instance
         source: String describing the data source
-    
+
     Returns:
         bool: True if successfully processed, False otherwise
     """
     # Prepare data for Excel
     data = prepare_excel_data(result)
-    
+
     # Check for duplicates
-    if not handle_duplicate_check(data):
+    if not handle_duplicate_check(data, excel_manager):
         return False
-    
+
     # Add to Excel
-    append_data_to_excel(data=[data])
-    
+    excel_manager.append_data_to_excel(data=[data])
+
     # Display result
     display_job_result(data)
     return True
 
 
-def handle_webpage_content(content):
+def handle_webpage_content(content, excel_manager):
     """
     Handle webpage content: process it and add to Excel if valid
+
+    Args:
+        content: Webpage content or URL
+        excel_manager: ExcelManager instance
     """
     # Remove view-source: prefix if present
     content = content.strip()
@@ -577,37 +582,38 @@ def handle_webpage_content(content):
             return
 
     # Process the validated result
-    process_validated_job_data(result, "LLM Backend")
+    process_validated_job_data(result, excel_manager, "LLM Backend")
 
 
-def handle_json_content(json_content):
+def handle_json_content(json_content, excel_manager):
     """
     Handle JSON input: parse and validate job data, then add to Excel if valid.
-    
+
     Args:
         json_content: JSON string containing job information
-    
+        excel_manager: ExcelManager instance
+
     Returns:
         bool: True if successfully processed, False otherwise
     """
     # Parse JSON with normalization
     success, result, error = parse_json_safe(json_content)
-    
+
     if not success:
         print_(f"JSON Input: {error}", "RED")
         return False
-    
+
     # Ensure Job_Title is mapped to Job Title for validation
     if 'Job_Title' in result and 'Job Title' not in result:
         result['Job Title'] = result['Job_Title']
-    
+
     # Validate the parsed JSON data
     validated_result = validate_job_data(result, "JSON Input")
     if not validated_result:
         return False
-    
+
     # Process the validated result
-    return process_validated_job_data(validated_result, "JSON Input")
+    return process_validated_job_data(validated_result, excel_manager, "JSON Input")
 
 
 def get_backup_directory():

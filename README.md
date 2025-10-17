@@ -40,6 +40,18 @@ Perfect for anyone managing multiple job applications and tired of spreadsheet d
 
 ## Key Features
 
+### High-Performance Caching Architecture
+IntelliApply uses an intelligent caching system that dramatically improves performance:
+- **Smart Cache**: DataFrame and workbook cached in memory, automatically invalidated only when file is externally modified
+- **Dual Cache Strategy**: Both pandas DataFrame (for fast reads) and openpyxl Workbook (for fast writes) kept in sync
+- **Internal Status Column**: Cell colors converted to `_internal_status` field in DataFrame for instant access
+- **mtime-Based Detection**: Uses file modification timestamps to detect external changes (2-second tolerance)
+- **Decorator-Driven**: `@sync` and `@save` decorators elegantly handle cache synchronization and persistence
+- **Conflict Detection**: Warns before overwriting external changes to prevent data loss
+- **Cache Integrity**: Deep copy for read-only operations, synchronized updates for writes, automatic index management
+
+For continuous search operations, response time is **near-instant** as data is read from memory instead of disk.
+
 ### AI-Powered Extraction
 Paste any job posting URL and watch as AI automatically extracts:
 - Company name
