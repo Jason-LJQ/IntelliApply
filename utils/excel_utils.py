@@ -1,5 +1,6 @@
 import re
 import functools
+import threading
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import PatternFill
 import pandas as pd
@@ -26,13 +27,15 @@ def sync(func):
 
 
 def save(func):
-    """Decorator: auto call _save_data() after function execution."""
+    """Decorator: auto call _save_data() asynchronously after function execution."""
 
     @functools.wraps(func)
     def wrapper(self, *args, **kwargs):
         result = func(self, *args, **kwargs)
         if hasattr(self, "_save_data"):
-            self._save_data()
+            # Start async save in background thread
+            save_thread = threading.Thread(target=self._save_data, daemon=True)
+            save_thread.start()
         return result
 
     return wrapper
