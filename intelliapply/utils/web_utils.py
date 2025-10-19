@@ -251,7 +251,7 @@ def validate_cookie():
             if response.status_code == 200 and all(keyword in response.text.lower() for keyword in keywords):
                 print_(f"{url} LOGGED IN.", "GREEN")
             else:
-                print_(f"{url} NOT LOGGED IN.", "RED")
+                print_(f"{url} NOT LOGGED IN.", "YELLOW")
                 success = False
 
         except requests.RequestException as e:

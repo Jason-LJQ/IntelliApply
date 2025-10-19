@@ -91,8 +91,8 @@ intelliapply/
 ├── config/
 │   ├── __init__.py
 │   ├── config.py          # Domain keywords, cookie paths, HTTP headers
-│   ├── credential.py      # API keys, Excel path (user-specific)
-│   ├── credential-example.py  # Configuration template
+│   ├── credential.py      # Config manager & loader (loads from user directory)
+│   ├── credential-example.yaml  # Configuration template
 │   └── prompt.py          # LLM prompts & Pydantic models
 │
 └── utils/
@@ -110,6 +110,20 @@ The package can be installed via:
 - **GitHub**: `pip install git+https://github.com/Jason-LJQ/IntelliApply.git` or `pipx install git+https://github.com/Jason-LJQ/IntelliApply.git`
 - **Source**: `pip install -e .` or `uv pip install -e .`
 - **Module execution**: `python -m intelliapply`
+
+### Configuration System
+
+IntelliApply uses a YAML-based configuration system with automatic setup:
+
+1. **Location**: `~/intelliApply_config/config.yaml` (cross-platform user home directory)
+2. **First-time setup**:
+   - Automatically copies template from `credential-example.yaml`
+   - Opens config file in default system editor
+   - Validates configuration before proceeding
+3. **Structure**: YAML format with `api` and `paths` sections
+4. **Loading**: `credential.py` contains `ConfigManager` class that handles all config operations
+
+This approach ensures credentials are never committed to version control while providing a smooth setup experience.
 
 ---
 
@@ -966,19 +980,25 @@ job_width = max(len(format_string(r['Job Title'], limit=65)) for r in results)
 
 ### Credential Management
 
-```python
-# config/credential-example.py (template)
-API_KEY_LIST = ["your-api-key-here"]
-EXCEL_FILE_PATH = "/path/to/excel"
-BACKUP_FOLDER_PATH = "/path/to/backups"
+```yaml
+# ~/intelliApply_config/config.yaml (auto-created from template)
+api:
+  api_key_list:
+    - "your-api-key-here"
+  base_url: "https://..."
+  model_list:
+    - "gemini-2.0-flash-exp"
 
-# config/credential.py (user-created, gitignored)
-# Contains actual credentials
+paths:
+  excel_file_path: "/path/to/excel"
+  backup_folder_path: "/path/to/backups"
 ```
 
 **Best Practices**:
-- credential.py is gitignored
-- Users copy from credential-example.py
+- Config stored in user home directory (`~/intelliApply_config/`)
+- Auto-created from `credential-example.yaml` on first run
+- Opens default editor for user to configure
+- Validates config before proceeding
 - No credentials in version control
 
 ### Cookie Security

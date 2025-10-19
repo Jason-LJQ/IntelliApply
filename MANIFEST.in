@@ -5,7 +5,7 @@ include CLAUDE.md
 include LICENSE
 
 # Include configuration example
-include intelliapply/config/credential-example.py
+include intelliapply/config/credential-example.yaml
 
 # Include images for documentation
 recursive-include images *.png *.jpg *.jpeg

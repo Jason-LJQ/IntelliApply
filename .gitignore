@@ -302,10 +302,12 @@ dist
 # Cursor
 .cursor/
 
-# Claude
+# Private files
+cookie.txt
+cookie.pkl
 CLAUDE.md
 
 # Temp rules
-package-lock.json
-uv.lock
-repo_txt_output.txt
+#package-lock.json
+#uv.lock
+#repo_txt_output.txt

@@ -143,34 +143,41 @@ pip install -e .
 # Or using uv (faster)
 uv pip install -e .
 
-# 3. Configure your credentials
-cp intelliapply/config/credential-example.py intelliapply/config/credential.py
-# Edit intelliapply/config/credential.py with your settings:
-#   - API_KEY_LIST: Your LLM API key(s)
-#   - BASE_URL: API endpoint URL
-#   - EXCEL_FILE_PATH: Where to store your job data
-#   - BACKUP_FOLDER_PATH: Where to save job posting backups
-
-# 4. Run IntelliApply
+# 3. Run IntelliApply
 intelliapply
 # Or: python -m intelliapply
 ```
+
+**First-time setup**:
+- On first run, IntelliApply creates `~/intelliApply_config/config.yaml`
+- The config file will open in your default editor automatically
+- Edit the file with your settings:
+  - `api.api_key_list`: Your LLM API key(s)
+  - `api.base_url`: API endpoint URL
+  - `paths.excel_file_path`: Where to store your job data
+  - `paths.backup_folder_path`: Where to save job posting backups
+- Save and press Enter to continue
 
 **Note**: IntelliApply automatically detects the best available browser (Chrome variants or Playwright chromium) at startup. If no browser is found, it will auto-install Playwright's chromium.
 
 ### Configuration
 
-Edit `intelliapply/config/credential.py` and set:
+Your configuration is stored at `~/intelliApply_config/config.yaml`. Edit it anytime:
 
-```python
+```yaml
 # LLM API Configuration
-API_KEY_LIST = ["your-api-key-here"]  # Add multiple keys for fallback
-BASE_URL = "https://api.provider.com/v1"  # OpenAI-compatible endpoint
-MODEL_LIST = ["model-name"]  # Model priority order
+api:
+  api_key_list:  # Add multiple keys for fallback
+    - "your-api-key-here"
+  base_url: "https://api.provider.com/v1"  # OpenAI-compatible endpoint
+  model_list:  # Model priority order
+    - "model-name"
+  reasoning_effort: "none"
 
 # Storage Configuration
-EXCEL_FILE_PATH = "/path/to/your/job_applications.xlsx"
-BACKUP_FOLDER_PATH = "/path/to/job_backups"
+paths:
+  excel_file_path: "/path/to/your/job_applications.xlsx"
+  backup_folder_path: "/path/to/job_backups"
 ```
 
 IntelliApply will create the Excel file automatically on first run.

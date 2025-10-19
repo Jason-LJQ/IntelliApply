@@ -83,7 +83,7 @@ def main():
 
     print_("Validating cookie...")
     if not validate_cookie():
-        print_("Cookie is invalid. It is recommended to update the cookie.", "RED")
+        print_("Cookie is invalid. It is recommended to update the cookie.", "YELLOW")
 
     def main_loop():
         global exit_flag
