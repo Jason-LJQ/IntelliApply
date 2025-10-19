@@ -8,10 +8,10 @@ import os
 import shutil
 from datetime import datetime
 
-from utils.print_utils import print_, print_results
-from utils.string_utils import normalize_company_name, get_abbreviation_lower, cleaned_string
-from config.credential import EXCEL_FILE_PATH
-from config.prompt import ALL_FIELDS
+from intelliapply.utils.print_utils import print_, print_results
+from intelliapply.utils.string_utils import normalize_company_name, get_abbreviation_lower, cleaned_string
+from intelliapply.config.credential import EXCEL_FILE_PATH
+from intelliapply.config.prompt import ALL_FIELDS
 
 
 def sync(func):

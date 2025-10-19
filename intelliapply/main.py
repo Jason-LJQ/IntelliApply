@@ -9,11 +9,10 @@ import time
 import signal
 import sys
 
-from utils.string_utils import is_markdown_table, parse_markdown_table, is_json
-from utils.excel_utils import ExcelManager
-from utils.print_utils import print_, print_results, COLOR
-from utils.web_utils import save_cookie, validate_cookie, handle_webpage_content, start_browser, add_cookie, \
-    handle_json_content, get_backup_directory
+from intelliapply.utils.string_utils import is_markdown_table, parse_markdown_table, is_json
+from intelliapply.utils.excel_utils import ExcelManager
+from intelliapply.utils.print_utils import print_, print_results, COLOR
+from intelliapply.utils.web_utils import save_cookie, validate_cookie, handle_webpage_content, start_browser, add_cookie, handle_json_content, get_backup_directory
 
 exit_flag = False
 

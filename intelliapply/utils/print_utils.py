@@ -1,4 +1,4 @@
-from utils.string_utils import format_string
+from intelliapply.utils.string_utils import format_string
 import os
 
 # Color constants

@@ -83,21 +83,33 @@
 ### Module Organization
 
 ```
-job/
+intelliapply/
+├── __init__.py            # Package metadata
+├── __main__.py            # Module execution entry point
+├── main.py                # CLI orchestration
+│
 ├── config/
+│   ├── __init__.py
 │   ├── config.py          # Domain keywords, cookie paths, HTTP headers
 │   ├── credential.py      # API keys, Excel path (user-specific)
+│   ├── credential-example.py  # Configuration template
 │   └── prompt.py          # LLM prompts & Pydantic models
 │
-├── utils/
-│   ├── excel_utils.py     # Excel operations & search engine
-│   ├── web_utils.py       # Web scraping & LLM integration
-│   ├── string_utils.py    # Text processing & normalization
-│   ├── print_utils.py     # Terminal rendering & UI
-│   └── singlefile.py      # Webpage backup functionality
-│
-└── main.py                # Entry point & CLI orchestration
+└── utils/
+    ├── __init__.py
+    ├── excel_utils.py     # Excel operations & search engine
+    ├── web_utils.py       # Web scraping & LLM integration
+    ├── string_utils.py    # Text processing & normalization
+    ├── print_utils.py     # Terminal rendering & UI
+    └── singlefile.py      # Webpage backup functionality
 ```
+
+### Installation Methods
+
+The package can be installed via:
+- **GitHub**: `pip install git+https://github.com/Jason-LJQ/IntelliApply.git` or `pipx install git+https://github.com/Jason-LJQ/IntelliApply.git`
+- **Source**: `pip install -e .` or `uv pip install -e .`
+- **Module execution**: `python -m intelliapply`
 
 ---
 
@@ -1166,6 +1178,38 @@ a24de30 - Add JSON input handling and validation
 
 ---
 
-**Last Updated**: 2025-10-17
+## Package Distribution
+
+### PyPI Package Structure
+
+IntelliApply is distributed as a Python package with the following characteristics:
+
+**Package Name**: `intelliapply`
+**Entry Points**:
+- CLI command: `intelliapply` → `intelliapply.main:main`
+- Module execution: `python -m intelliapply` → `intelliapply.__main__:main`
+
+**Installation Methods**:
+```bash
+# Global installation with pipx (recommended for CLI tools)
+pipx install git+https://github.com/Jason-LJQ/IntelliApply.git
+
+# Local installation with pip
+pip install git+https://github.com/Jason-LJQ/IntelliApply.git
+
+# Development installation from source
+git clone https://github.com/Jason-LJQ/IntelliApply.git
+cd IntelliApply
+pip install -e .
+# Or: uv pip install -e .
+```
+
+**Build System**: `setuptools` with `pyproject.toml` configuration
+
+**Dependencies**: See `pyproject.toml` for full dependency list
+
+---
+
+**Last Updated**: 2025-10-18
 **Author**: Jason Liao
 **License**: See LICENSE file

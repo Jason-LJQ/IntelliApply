@@ -116,35 +116,51 @@ IntelliApply is flexible about how you add jobs:
 
 ### Installation
 
+#### Option 1: Install from GitHub (Recommended)
+
+```bash
+# Install globally with pipx (recommended for CLI tools)
+pipx install git+https://github.com/Jason-LJQ/IntelliApply.git
+
+# Or install with pip
+pip install git+https://github.com/Jason-LJQ/IntelliApply.git
+
+# Configure credentials
+intelliapply  # Run the command
+# Edit intelliapply/config/credential.py with your settings
+```
+
+#### Option 2: Install from Source
+
 ```bash
 # 1. Clone the repository
 git clone https://github.com/Jason-LJQ/IntelliApply.git
 cd IntelliApply
 
-# 2. Install dependencies (using uv, recommended)
-uv install
+# 2. Install with pip
+pip install -e .
 
-# 3. Ensure Playwright Chromium is installed
-**Note**: IntelliApply will automatically detect and use your installed Chrome browser (stable, dev, or canary channel) at startup for optimal performance.
+# Or using uv (faster)
+uv pip install -e .
 
-
-# 4. Configure your credentials
-cp config/credential-example.py config/credential.py
-# Edit config/credential.py with your settings:
+# 3. Configure your credentials
+cp intelliapply/config/credential-example.py intelliapply/config/credential.py
+# Edit intelliapply/config/credential.py with your settings:
 #   - API_KEY_LIST: Your LLM API key(s)
 #   - BASE_URL: API endpoint URL
 #   - EXCEL_FILE_PATH: Where to store your job data
 #   - BACKUP_FOLDER_PATH: Where to save job posting backups
 
-# 5. Run IntelliApply
-python main.py
+# 4. Run IntelliApply
+intelliapply
+# Or: python -m intelliapply
 ```
 
 **Note**: IntelliApply automatically detects the best available browser (Chrome variants or Playwright chromium) at startup. If no browser is found, it will auto-install Playwright's chromium.
 
 ### Configuration
 
-Open `config/credential.py` and set:
+Edit `intelliapply/config/credential.py` and set:
 
 ```python
 # LLM API Configuration
@@ -164,7 +180,11 @@ IntelliApply will create the Excel file automatically on first run.
 ### Starting IntelliApply
 
 ```bash
-python main.py
+# If installed with pip/pipx
+intelliapply
+
+# If installed from source with -e flag
+python -m intelliapply
 ```
 
 You'll see a welcome prompt with available commands. The interface adapts based on context (e.g., shows status marking commands after search).

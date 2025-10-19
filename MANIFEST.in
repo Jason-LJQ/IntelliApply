@@ -1,0 +1,31 @@
+# Include documentation files
+include README.md
+include DESIGN.md
+include CLAUDE.md
+include LICENSE
+
+# Include configuration example
+include intelliapply/config/credential-example.py
+
+# Include images for documentation
+recursive-include images *.png *.jpg *.jpeg
+
+# Exclude unnecessary files
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude .DS_Store
+global-exclude *.swp
+global-exclude *~
+
+# Exclude development and testing files
+exclude .gitignore
+exclude applied_job_checker.py
+exclude repo_txt_output.txt
+exclude uv.lock
+
+# Exclude virtual environment and IDE files
+prune .venv
+prune .idea
+prune .cursor
+prune .git
+prune .github

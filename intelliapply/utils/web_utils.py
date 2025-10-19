@@ -10,11 +10,11 @@ import requests
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 
-from config.config import DOMAIN_KEYWORDS, COOKIE_PATH, HEADERS
-from config.prompt import SYSTEM_PROMPT, JobInfo, REQUIRED_FIELDS
-from config.credential import API_KEY_LIST, BASE_URL, MODEL_LIST, REASONING_EFFORT, BACKUP_FOLDER_PATH
-from utils.print_utils import print_
-from utils.string_utils import parse_json_safe
+from intelliapply.config.config import DOMAIN_KEYWORDS, COOKIE_PATH, HEADERS
+from intelliapply.config.prompt import SYSTEM_PROMPT, JobInfo, REQUIRED_FIELDS
+from intelliapply.config.credential import API_KEY_LIST, BASE_URL, MODEL_LIST, REASONING_EFFORT, BACKUP_FOLDER_PATH
+from intelliapply.utils.print_utils import print_
+from intelliapply.utils.string_utils import parse_json_safe
 
 # Initialize session objects
 session = requests.session()
@@ -747,7 +747,7 @@ def backup_url_local_async(url, company="", job_title=""):
 
     def _backup_request():
         try:
-            from utils.singlefile import download_page
+            from intelliapply.utils.singlefile import download_page
 
             backup_dir = get_backup_directory()
             if not backup_dir:
