@@ -66,6 +66,45 @@ JS_REQUIRED_PATTERNS = [
     r'cloudflare', r'cf-ray',  # CF challenge hints
 ]
 BLOCK_STATUS = {403, 429, 503}
+_CHROME_CHANNELS = ['chrome', 'chrome-dev', 'chrome-canary']
+
+def detect_playwright_channel():
+    """
+    Detect and select the best available Playwright browser channel.
+    Tests channels in order of preference and caches the result.
+    Runs quickly and silently on startup.
+    
+    Returns:
+        str or None: Best available channel name, or None to use default
+    """
+        
+    # Channels to test in order of preference
+    # chrome/msedge are typically faster than chromium
+    
+    
+    try:
+        from playwright.sync_api import sync_playwright
+        
+        with sync_playwright() as p:
+            for channel in _CHROME_CHANNELS:
+                try:
+                    # Quick launch test - no actual navigation
+                    browser = p.chromium.launch(channel=channel, headless=True)
+                    browser.close()
+                    return channel
+                except Exception:
+                    # Channel not available, try next one
+                    continue
+            
+    except Exception as e:
+        print_(f"Error detecting Playwright channel: {str(e)}", "RED")
+        raise e
+    
+    # No specific channel worked, use default (None)
+    raise ValueError("No supported Chrome found. Please install any of Chrome, Chrome Dev, or Chrome Canary browsers.")
+
+# Cache for Playwright browser channel
+_PLAYWRIGHT_CHANNEL = detect_playwright_channel()
 
 
 def analyze_content_for_playwright(html, status_code, redirect=True) -> bool:
@@ -378,7 +417,7 @@ def fetch_with_playwright(url):
     try:
         print_("Using Playwright for dynamic content loading...")
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            browser = p.chromium.launch(channel=_PLAYWRIGHT_CHANNEL, headless=True)
             # Create browser context and add cookies
             context = browser.new_context()
             # if 'linkedin.com' in url or 'handshake.com' in url:

@@ -127,9 +127,9 @@ class ExcelManager:
             return
 
         # Cache invalid, reload from disk
+        self.invalidate_cache()
+        print_(f"Reloading Excel data from file", "YELLOW")
         try:
-            self.invalidate_cache()
-
             # Load data with pandas
             df = pd.read_excel(self.file_path)
 
@@ -190,7 +190,7 @@ class ExcelManager:
             self._cached_workbook.close()
             self._cached_workbook = None
 
-            print_("Excel data will reload next time to avoid conflict.", "YELLOW")
+            print_("Excel data will be reloaded from disk next time.", "YELLOW")
 
     def _check_for_write_conflict(self):
         """

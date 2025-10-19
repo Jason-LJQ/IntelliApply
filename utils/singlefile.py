@@ -12,10 +12,12 @@ HEADERS = {
 CHROME_PATHS = [
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+    "/Applications/Google Chrome Dev.app/Contents/MacOS/Google Chrome Dev",
     "/Applications/Chromium.app/Contents/MacOS/Chromium",
     # Windows paths
     "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
     "C:\\Program Files\\Google\\Chrome Canary\\Application\\chrome.exe",
+    "C:\\Program Files\\Google\\Chrome Dev\\Application\\chrome.exe",
     "C:\\Program Files\\Chromium\\Application\\chrome.exe",
     # Add other paths if needed
 ]

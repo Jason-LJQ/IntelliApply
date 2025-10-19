@@ -308,3 +308,4 @@ CLAUDE.md
 # Temp rules
 package-lock.json
 uv.lock
+repo_txt_output.txt

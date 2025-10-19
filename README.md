@@ -97,6 +97,7 @@ IntelliApply is flexible about how you add jobs:
 - **Static pages**: Fast scraping with requests + BeautifulSoup
 - **JavaScript-heavy pages**: Automatic fallback to Playwright for SPAs
 - **Smart detection**: Analyzes content to choose the right method
+- **Browser optimization**: Auto-detects best Chrome channel at startup (no runtime overhead)
 - **Cookie persistence**: Stay logged into LinkedIn and Handshake
 
 ### Data Management
@@ -111,6 +112,7 @@ IntelliApply is flexible about how you add jobs:
 
 - **Python 3.8+**
 - **OpenAI-compatible API key** (Google Gemini, OpenAI, or any compatible provider)
+- **Chrome browser** (Chrome, Chrome Dev, or Chrome Canary) - Required for JavaScript-heavy job sites
 
 ### Installation
 
@@ -122,8 +124,9 @@ cd IntelliApply
 # 2. Install dependencies (using uv, recommended)
 uv install
 
-# 3. Install Playwright browsers for JavaScript-heavy job sites
-playwright install
+# 3. Ensure Playwright Chromium is installed
+**Note**: IntelliApply will automatically detect and use your installed Chrome browser (stable, dev, or canary channel) at startup for optimal performance.
+
 
 # 4. Configure your credentials
 cp config/credential-example.py config/credential.py
@@ -136,6 +139,8 @@ cp config/credential-example.py config/credential.py
 # 5. Run IntelliApply
 python main.py
 ```
+
+**Note**: IntelliApply will automatically detect and use your installed Chrome browser (stable, dev, or canary channel) at startup for optimal performance.
 
 ### Configuration
 
@@ -431,6 +436,11 @@ Want to dive deeper? See **[DESIGN.md](DESIGN.md)** for:
 **Q: LLM extraction fails with "Invalid content format"**
 - Check that required fields (Company, Location, Job Title) are present in the job posting
 - Try wrapping content manually with `< >` and cleaning up formatting
+
+**Q: "No supported Chrome found" error on startup**
+- IntelliApply requires Chrome, Chrome Dev, or Chrome Canary to be installed
+- Install any Chrome variant from [google.com/chrome](https://www.google.com/chrome/)
+- The app will automatically detect and use the best available channel
 
 **Q: Search doesn't find jobs I know exist**
 - Try searching by initials or abbreviation
