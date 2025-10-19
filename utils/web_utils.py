@@ -1,5 +1,5 @@
 import re
-import subprocess
+import subprocess, shutil, sys
 import pickle
 import threading
 import time
@@ -66,7 +66,8 @@ JS_REQUIRED_PATTERNS = [
     r'cloudflare', r'cf-ray',  # CF challenge hints
 ]
 BLOCK_STATUS = {403, 429, 503}
-_CHROME_CHANNELS = ['chrome', 'chrome-dev', 'chrome-canary']
+_CHROME_CHANNELS = ['chrome', 'chrome-dev', 'chrome-canary', '']
+
 
 def detect_playwright_channel():
     """
@@ -77,14 +78,11 @@ def detect_playwright_channel():
     Returns:
         str or None: Best available channel name, or None to use default
     """
-        
+
     # Channels to test in order of preference
-    # chrome/msedge are typically faster than chromium
-    
-    
+    print_("Detecting available Playwright browser channel...", "YELLOW")
+
     try:
-        from playwright.sync_api import sync_playwright
-        
         with sync_playwright() as p:
             for channel in _CHROME_CHANNELS:
                 try:
@@ -95,13 +93,31 @@ def detect_playwright_channel():
                 except Exception:
                     # Channel not available, try next one
                     continue
-            
+
     except Exception as e:
-        print_(f"Error detecting Playwright channel: {str(e)}", "RED")
+        print_(f"Error detecting Browser: {str(e)}", "RED")
         raise e
-    
-    # No specific channel worked, use default (None)
-    raise ValueError("No supported Chrome found. Please install any of Chrome, Chrome Dev, or Chrome Canary browsers.")
+
+    # No specific channel worked, install browsers and use default (None)
+    ensure_playwright_browsers()
+    return ''
+
+
+def ensure_playwright_browsers():
+    # Cross-platform detection
+    playwright_cmd = shutil.which("playwright")
+    if playwright_cmd is None:
+        print("[error] Playwright CLI not found in PATH.")
+        print("Please install it via: pip install playwright")
+        sys.exit(1)
+
+    try:
+        subprocess.run([playwright_cmd, "install", "chromium"], check=True)
+        print_("Playwright browsers installed successfully.", "GREEN")
+    except subprocess.CalledProcessError as e:
+        print_(f"Failed to install Playwright browsers: {e}", "RED")
+        sys.exit(1)
+
 
 # Cache for Playwright browser channel
 _PLAYWRIGHT_CHANNEL = detect_playwright_channel()
@@ -662,12 +678,12 @@ def get_backup_directory():
     """
     try:
         backup_dir = BACKUP_FOLDER_PATH
-        
+
         # Create backup directory if it doesn't exist
         if not os.path.exists(backup_dir):
             os.makedirs(backup_dir, exist_ok=True)
             print_(f"Created backup directory: {backup_dir}", "GREEN")
-        
+
         return backup_dir
     except Exception as e:
         print_(f"Error creating backup directory: {str(e)}", "RED")
@@ -691,18 +707,18 @@ def generate_backup_filename(company, job_title, backup_dir):
         # Clean company and job title for filename
         company_clean = re.sub(r'[^\w\-_.]', '_', company.strip()) if company else "unknown_company"
         job_title_clean = re.sub(r'[^\w\-_.]', '_', job_title.strip()) if job_title else "unknown_job"
-        
+
         # Get current date
         current_date = datetime.now().strftime("%Y%m%d")
-        
+
         # Generate base filename
         base_filename = f"{company_clean}_{job_title_clean}_{current_date}"
         filename = f"{base_filename}.html"
-        
+
         # Check if file already exists
         if not os.path.exists(os.path.join(backup_dir, filename)):
             return filename
-        
+
         # If duplicate exists, start adding numbers from 2
         no = 2
         while True:
@@ -710,7 +726,7 @@ def generate_backup_filename(company, job_title, backup_dir):
             if not os.path.exists(os.path.join(backup_dir, filename)):
                 return filename
             no += 1
-        
+
     except Exception as e:
         print_(f"Error generating backup filename: {str(e)}", "YELLOW")
         # Fallback to timestamp-based naming
@@ -732,24 +748,24 @@ def backup_url_local_async(url, company="", job_title=""):
     def _backup_request():
         try:
             from utils.singlefile import download_page
-            
+
             backup_dir = get_backup_directory()
             if not backup_dir:
                 print_(f"Failed to get backup directory, skipping backup", "RED")
                 return
-            
+
             # Generate filename using company and job title
             filename_template = generate_backup_filename(company, job_title, backup_dir)
-            
+
             # Use existing cookie path for singlefile
             try:
                 result = download_page(url, COOKIE_PATH, backup_dir, filename_template)
-                
+
                 if result == -1:
                     print_(f"Failed to backup URL locally.", "RED")
             except Exception as save_error:
                 print_(f"Error during backup save: {str(save_error)}", "RED")
-                
+
         except Exception as e:
             print_(f"Local backup request failed: {str(e)}", "RED")
 

@@ -41,8 +41,16 @@ def set_chrome_path():
     for path in CHROME_PATHS:
         if os.path.exists(path):
             return path
-    return ""
+    
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser_path = p.chromium.executable_path
+            return browser_path
+    except Exception:
+        pass
 
+    raise ValueError("No supported Chrome found. Please install Chrome.")
 
 CHROME_PATH = set_chrome_path()
 
@@ -129,4 +137,4 @@ def download_page(url, cookies_path, output_path, output_name_template="", times
 
 if __name__ == "__main__":
     # Example usage
-    download_page("https://google.com", "", "/Users/jason/Library/Caches", "", timestamp=1678886400)
+    download_page("https://google.com", "", "/tmp/1", "", timestamp=1678886400)

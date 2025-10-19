@@ -807,26 +807,41 @@ _CHROME_CHANNELS = ['chrome', 'chrome-dev', 'chrome-canary']
 
 ### Playwright Browser Channel Auto-Detection
 
-**Startup Optimization**: IntelliApply automatically detects the best available Chrome browser channel at startup and caches it for all subsequent Playwright operations.
+**Startup Optimization**: Automatically detects the best available browser channel at startup with intelligent fallback.
 
-**Key Benefits**:
-- **Fast**: Detection happens once at startup, no repeated checks
-- **Seamless**: Users don't notice the detection process
-- **Reliable**: Tests actual browser launch capability, not just file existence
-- **Chrome-focused**: Only supports Chrome family browsers for consistency
-- **Error-friendly**: Clear error message if no supported browser is installed
-
-**Usage in fetch_with_playwright()**:
+**Detection Strategy**:
 ```python
-def fetch_with_playwright(url):
-    """Fetch dynamic content using pre-detected Chrome channel."""
-    with sync_playwright() as p:
-        # Use cached channel detected at startup
-        browser = p.chromium.launch(channel=_PLAYWRIGHT_CHANNEL, headless=True)
-        # ... rest of fetching logic
+_CHROME_CHANNELS = ['chrome', 'chrome-dev', 'chrome-canary', '']  # '' = default chromium
+
+def detect_playwright_channel():
+    for channel in _CHROME_CHANNELS:
+        try:
+            browser = p.chromium.launch(channel=channel, headless=True)
+            browser.close()
+            return channel
+        except:
+            continue
+    
+    # No browser found - auto-install Playwright chromium
+    ensure_playwright_browsers()
+    return ''
+
+_PLAYWRIGHT_CHANNEL = detect_playwright_channel()  # Runs once at module load
 ```
 
-**Performance Impact**: Near-zero - detection adds ~100-300ms to startup time, but saves 50-100ms per Playwright request by avoiding channel auto-detection overhead.
+**Fallback Mechanism**:
+1. Try Chrome variants in priority order
+2. Try default Playwright chromium (`channel=''`)
+3. If all fail, auto-install via `playwright install chromium`
+4. Exit if installation fails (user must fix environment)
+
+**Key Benefits**:
+- **Zero configuration**: Works out-of-box with any Chrome or Playwright chromium
+- **Fast**: Single detection at startup (~100-300ms), saves 50-100ms per request
+- **Resilient**: Auto-installs missing browsers
+- **Consistent**: Same browser for entire session
+
+**Usage**: `browser = p.chromium.launch(channel=_PLAYWRIGHT_CHANNEL, headless=True)`
 
 ### Iframe Processing
 

@@ -140,7 +140,7 @@ cp config/credential-example.py config/credential.py
 python main.py
 ```
 
-**Note**: IntelliApply will automatically detect and use your installed Chrome browser (stable, dev, or canary channel) at startup for optimal performance.
+**Note**: IntelliApply automatically detects the best available browser (Chrome variants or Playwright chromium) at startup. If no browser is found, it will auto-install Playwright's chromium.
 
 ### Configuration
 
@@ -437,10 +437,10 @@ Want to dive deeper? See **[DESIGN.md](DESIGN.md)** for:
 - Check that required fields (Company, Location, Job Title) are present in the job posting
 - Try wrapping content manually with `< >` and cleaning up formatting
 
-**Q: "No supported Chrome found" error on startup**
-- IntelliApply requires Chrome, Chrome Dev, or Chrome Canary to be installed
-- Install any Chrome variant from [google.com/chrome](https://www.google.com/chrome/)
-- The app will automatically detect and use the best available channel
+**Q: Playwright browser installation prompt**
+- If no Chrome or Playwright chromium is found, automatic installation will run
+- This is a one-time setup that installs Playwright's chromium browser
+- Alternatively, install Chrome manually from [google.com/chrome](https://www.google.com/chrome/)
 
 **Q: Search doesn't find jobs I know exist**
 - Try searching by initials or abbreviation
