@@ -630,7 +630,6 @@ def handle_webpage_content(content, excel_manager):
         company = result.get('Company', '')
         job_title = result.get('Job Title', '')
         backup_url_local_async(url, company, job_title)
-        print_("Started local backup of URL using singlefile")
     else:
         result = process_helper(content)
         if not result:
@@ -666,6 +665,13 @@ def handle_json_content(json_content, excel_manager):
     validated_result = validate_job_data(result, "JSON Input")
     if not validated_result:
         return False
+
+    # Backup URL to local storage using singlefile with job info
+    url = result.get('Link', '')
+    if url:
+        company = result.get('Company', '')
+        job_title = result.get('Job Title', '')
+        backup_url_local_async(url, company, job_title)
 
     # Process the validated result
     return process_validated_job_data(validated_result, excel_manager, "JSON Input")
@@ -744,6 +750,8 @@ def backup_url_local_async(url, company="", job_title=""):
         company: Company name for filename generation
         job_title: Job title for filename generation
     """
+
+    print_("Started local backup of URL using singlefile")
 
     def _backup_request():
         try:
