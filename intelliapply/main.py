@@ -236,7 +236,6 @@ def main():
                     mark_func = excel_manager.mark_as_offer
 
                 # Show confirmation prompt with color formatting
-                from utils.print_utils import COLOR
                 action_text_colored = f"{COLOR[action_color]}{action_text}{COLOR["BLUE"]}"
                 print_(f"\nDo you want to mark {COLOR["RESET"]}{job_title}{COLOR["BLUE"]} at {COLOR["RESET"]}{company}{COLOR["BLUE"]} as {action_text_colored}?","BLUE")
                 print_results([row_data])
