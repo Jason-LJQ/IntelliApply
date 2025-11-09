@@ -3,7 +3,7 @@ name = "intelliapply"
 version = "0.1.0"
 description = "Intelligent job application tracking powered by AI - LLM-powered information extraction, smart search, and multi-status workflow management"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
     {name = "Jason Liao", email = "jason@example.com"}
@@ -14,6 +14,7 @@ classifiers = [
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Office/Business",

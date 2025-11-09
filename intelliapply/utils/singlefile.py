@@ -1,3 +1,4 @@
+import shutil
 from subprocess import run, CalledProcessError
 import os
 import time
@@ -27,6 +28,10 @@ def install_singlefile():
     """Installs single-file in the same directory as the script."""
     print("node_modules not found. Installing single-file...")
     try:
+        # Check if npm is installed
+        if not shutil.which("npm"):
+            print("npm not found. Please install npm.")
+            exit(1)
         # Install single-file locally
         run("npm i", shell=True, check=True, cwd=os.path.dirname(__file__))
         print("single-file installed successfully.")
@@ -97,7 +102,7 @@ def download_page(url, cookies_path, output_path, output_name_template="", times
             addQuotes(url)
         ]
 
-        if cookies_path:
+        if cookies_path and os.path.exists(cookies_path):
             args.append("--browser-cookies-file=" + addQuotes(cookies_path))
 
         if output_name_template:
