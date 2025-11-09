@@ -236,8 +236,8 @@ def main():
                     mark_func = excel_manager.mark_as_offer
 
                 # Show confirmation prompt with color formatting
-                action_text_colored = f"{COLOR[action_color]}{action_text}{COLOR["BLUE"]}"
-                print_(f"\nDo you want to mark {COLOR["RESET"]}{job_title}{COLOR["BLUE"]} at {COLOR["RESET"]}{company}{COLOR["BLUE"]} as {action_text_colored}?","BLUE")
+                action_text_colored = f"{COLOR[action_color]}{action_text}{COLOR['BLUE']}"
+                print_(f"\nDo you want to mark {COLOR['RESET']}{job_title}{COLOR['BLUE']} at {COLOR['RESET']}{company}{COLOR['BLUE']} as {action_text_colored}?","BLUE")
                 print_results([row_data])
                 confirm = input(print_("Confirm? (y/N): ", color="BLUE", return_text=True)).strip().lower()
 
@@ -245,6 +245,7 @@ def main():
                     row_index = row_data['row_index']
                     mark_func(row_index=row_index)
                     print_(f"Updated record:")
+                    time.sleep(0.5)
                     print_results(excel_manager.search_applications(index=row_index))
                     last_results = None
                     continue
