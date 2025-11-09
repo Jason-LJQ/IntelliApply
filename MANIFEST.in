@@ -7,6 +7,10 @@ include LICENSE
 # Include configuration example
 include intelliapply/config/credential-example.yaml
 
+# Include npm dependency files for single-file
+include intelliapply/utils/package.json
+include intelliapply/utils/package-lock.json
+
 # Include images for documentation
 recursive-include images *.png *.jpg *.jpeg
 
