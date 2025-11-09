@@ -110,7 +110,7 @@ IntelliApply is flexible about how you add jobs:
 
 ### Prerequisites
 
-- **Python 3.8+**
+- **Python 3.11+**
 - **OpenAI-compatible API key** (Google Gemini, OpenAI, or any compatible provider)
 - **Chrome browser** (Chrome, Chrome Dev, or Chrome Canary) - Required for JavaScript-heavy job sites
 
@@ -146,6 +146,31 @@ uv pip install -e .
 # 3. Run IntelliApply
 intelliapply
 # Or: python -m intelliapply
+```
+
+#### Updating IntelliApply
+
+**If installed with pipx:**
+```bash
+# Update to latest version from GitHub
+pipx upgrade intelliapply
+
+# Or force reinstall if upgrade doesn't work
+pipx reinstall intelliapply
+
+```
+
+**If installed with pip:**
+```bash
+# Update to latest version
+pip install --upgrade git+https://github.com/Jason-LJQ/IntelliApply.git
+```
+
+**If installed from source:**
+```bash
+# Pull latest changes and reinstall
+git pull
+pip install -e .  # or: uv pip install -e .
 ```
 
 **First-time setup**:
