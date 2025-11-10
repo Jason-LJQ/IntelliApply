@@ -244,9 +244,6 @@ def main():
                 if confirm == 'y':
                     row_index = row_data['row_index']
                     mark_func(row_index=row_index)
-                    print_(f"Updated record:")
-                    time.sleep(0.5)
-                    print_results(excel_manager.search_applications(index=row_index))
                     last_results = None
                     continue
                 else:
