@@ -12,7 +12,7 @@ from playwright.sync_api import sync_playwright
 
 from intelliapply.config.config import DOMAIN_KEYWORDS, COOKIE_PATH, HEADERS
 from intelliapply.config.prompt import SYSTEM_PROMPT, JobInfo, REQUIRED_FIELDS
-from intelliapply.config.credential import API_KEY_LIST, BASE_URL, MODEL_LIST, REASONING_EFFORT, BACKUP_FOLDER_PATH
+from intelliapply.config.credential import API_SERVICES, BACKUP_FOLDER_PATH
 from intelliapply.utils.print_utils import print_
 from intelliapply.utils.string_utils import parse_json_safe
 
@@ -267,38 +267,42 @@ def process_webpage_content(content):
     Supports multiple API keys with automatic retry logic.
     """
 
-    # Try each model with all API keys
-    for model in MODEL_LIST:
-        for api_key in API_KEY_LIST:
-            try:
-                print_(f"Sending content to {model} with API key {api_key[:10]}...")
-                client = OpenAI(api_key=api_key, base_url=BASE_URL)
+    # Try each API service in order
+    for idx, service in enumerate(API_SERVICES, 1):
+        api_key = service.get('api_key', '')
+        base_url = service.get('base_url', '')
+        model = service.get('model', '')
+        reasoning_effort = service.get('reasoning_effort', 'none')
+        
+        try:
+            print_(f"Service {idx}: Sending content to {model} with API key {api_key[:10]}...")
+            client = OpenAI(api_key=api_key, base_url=base_url)
 
-                response = client.beta.chat.completions.parse(
-                    model=model,
-                    reasoning_effort=REASONING_EFFORT,
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": content}
-                    ],
-                    temperature=0,
-                    response_format=JobInfo
-                )
+            response = client.beta.chat.completions.parse(
+                model=model,
+                reasoning_effort=reasoning_effort,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": content}
+                ],
+                temperature=0,
+                response_format=JobInfo
+            )
 
-                # Parse the response and convert Job_Title to Job Title
-                result = response.choices[0].message.parsed
-                return {
-                    "isValid": result.isValid,
-                    "Company": result.Company,
-                    "Location": result.Location,
-                    "Job Title": result.Job_Title,
-                    "Code": result.Code,
-                    "Type": result.Type,
-                    "Link": result.Link
-                }
-            except Exception as e:
-                print_(f"API key {api_key[:10]}... error: {str(e)}", "RED")
-                continue
+            # Parse the response and convert Job_Title to Job Title
+            result = response.choices[0].message.parsed
+            return {
+                "isValid": result.isValid,
+                "Company": result.Company,
+                "Location": result.Location,
+                "Job Title": result.Job_Title,
+                "Code": result.Code,
+                "Type": result.Type,
+                "Link": result.Link
+            }
+        except Exception as e:
+            print_(f"Service {idx} error: {str(e)}", "RED")
+            continue
 
     print_(f"Error processing content through LLM", "RED")
     return {"isValid": False}

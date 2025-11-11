@@ -10,7 +10,10 @@ import platform
 import subprocess
 from pathlib import Path
 from typing import Dict, Any
+from urllib.parse import urlparse
 import yaml
+
+from intelliapply.utils.print_utils import print_
 
 
 class ConfigManager:
@@ -25,6 +28,7 @@ class ConfigManager:
         self.config_dir = self._get_config_dir()
         self.config_file = self.config_dir / self.CONFIG_FILE_NAME
         self._ensure_config_exists()
+        self._ensure_config_valid()
 
     @staticmethod
     def _get_config_dir() -> Path:
@@ -57,30 +61,34 @@ class ConfigManager:
         # Create config directory if it doesn't exist
         if not self.config_dir.exists():
             self.config_dir.mkdir(parents=True, exist_ok=True)
-            print(f"Created config directory: {self.config_dir}")
+            print_(f"Created config directory: {self.config_dir}", "GREEN")
 
         # Check if config file exists
         if not self.config_file.exists():
             self._create_config_from_template()
             self._open_config_file()
-            print("\n" + "=" * 60)
-            print("FIRST TIME SETUP REQUIRED")
-            print("=" * 60)
-            print(f"Default config file created at:\n{self.config_file}")
-            print("\nPlease edit the config file with your actual credentials.")
-            print("The file has been opened in your default editor.")
-            print("\nPress Enter after you have saved your changes...")
-            print("=" * 60)
+            print_("\n" + "=" * 60)
+            print_("FIRST TIME SETUP REQUIRED", "YELLOW")
+            print_("=" * 60)
+            print_(f"Default config file created at:\n{self.config_file}")
+            print_("\nPlease edit the config file with your actual credentials.")
+            print_("The file has been opened in your default editor.")
+            print_("\nPress Enter after you have saved your changes...")
+            print_("=" * 60)
             input()
 
-            # Validate after user edits
-            if not self._validate_config():
-                print("\nERROR: Configuration is invalid or incomplete!")
-                print("Please check the following:")
-                print("1. API keys are not placeholder values")
-                print("2. File paths are valid and exist")
-                print("3. YAML syntax is correct")
-                sys.exit(1)
+
+    def _ensure_config_valid(self) -> None:
+        """
+        Ensure the configuration is valid.
+        """
+        if not self._validate_config():
+            print_("\nERROR: Configuration is invalid or incomplete!", "RED")
+            print_("Please check the following:")
+            print_("1. API services are correctly configured")
+            print_("2. File paths are valid and exist")
+            print_("3. YAML syntax is correct")
+            sys.exit(1)
 
     def _create_config_from_template(self) -> None:
         """Copy credential-example.yaml to user's config directory."""
@@ -109,10 +117,10 @@ class ConfigManager:
                         subprocess.run([editor, str(self.config_file)])
                         break
             else:
-                print(f"Please manually open and edit: {self.config_file}")
+                print_(f"Please manually open and edit: {self.config_file}", "YELLOW")
         except Exception as e:
-            print(f"Could not auto-open config file: {e}")
-            print(f"Please manually open and edit: {self.config_file}")
+            print_(f"Could not auto-open config file: {e}", "RED")
+            print_(f"Please manually open and edit: {self.config_file}", "YELLOW")
 
     def _validate_config(self) -> bool:
         """
@@ -124,27 +132,87 @@ class ConfigManager:
         try:
             config = self.load_config()
 
-            # Check API section
-            api = config.get('api', {})
-            api_keys = api.get('api_key_list', [])
+            # Check API services section
+            api_services = config.get('api_services', [])
 
-            # Validate API keys are not placeholder
-            if not api_keys or any('xxxx' in key for key in api_keys):
+            # Validate API services exist
+            if not api_services:
+                print_("Error: No API services configured", "RED")
                 return False
+            
+            # Validate each service
+            for idx, service in enumerate(api_services, 1):
+                # Check required fields are not empty
+                api_key = service.get('api_key', '').strip()
+                base_url = service.get('base_url', '').strip()
+                model = service.get('model', '').strip()
+                reasoning_effort = service.get('reasoning_effort', '').strip()
+                
+                # Validate api_key
+                if not api_key:
+                    print_(f"Error: Service {idx} - api_key is empty", "RED")
+                    return False
+                if 'xxxx' in api_key.lower():
+                    print_(f"Error: Service {idx} - api_key contains placeholder value", "RED")
+                    return False
+                
+                # Validate base_url
+                if not base_url:
+                    print_(f"Error: Service {idx} - base_url is empty", "RED")
+                    return False
+                if not self._is_valid_url(base_url):
+                    print_(f"Error: Service {idx} - base_url is not a valid URL: {base_url}", "RED")
+                    return False
+                
+                # Validate model
+                if not model:
+                    print_(f"Error: Service {idx} - model is empty", "RED")
+                    return False
+                
+                # Validate reasoning_effort
+                if not reasoning_effort:
+                    print_(f"Error: Service {idx} - reasoning_effort is empty", "RED")
+                    return False
+                if reasoning_effort not in ['none', 'low', 'medium', 'high']:
+                    print_(f"Error: Service {idx} - reasoning_effort must be one of: none, low, medium, high", "RED")
+                    return False
 
             # Check paths section
             paths = config.get('paths', {})
-            excel_path = paths.get('excel_file_path', '')
-            backup_path = paths.get('backup_folder_path', '')
+            excel_path = paths.get('excel_file_path', '').strip()
+            backup_path = paths.get('backup_folder_path', '').strip()
 
-            # Validate paths are not placeholder
-            if '/path/to/' in excel_path or '/path/to/' in backup_path:
+            # Validate paths are not empty or placeholder
+            if not excel_path or '/path/to/' in excel_path:
+                print_("Error: excel_file_path is empty or contains placeholder", "RED")
+                return False
+            
+            if not backup_path or '/path/to/' in backup_path:
+                print_("Error: backup_folder_path is empty or contains placeholder", "RED")
                 return False
 
             return True
 
         except Exception as e:
-            print(f"Config validation error: {e}")
+            print_(f"Config validation error: {e}", "RED")
+            return False
+    
+    @staticmethod
+    def _is_valid_url(url: str) -> bool:
+        """
+        Validate if a string is a valid URL.
+        
+        Args:
+            url: URL string to validate
+            
+        Returns:
+            True if valid URL, False otherwise
+        """
+        try:
+            result = urlparse(url)
+            # Check if scheme and netloc are present
+            return all([result.scheme in ['http', 'https'], result.netloc])
+        except Exception:
             return False
 
     def load_config(self) -> Dict[str, Any]:
@@ -166,10 +234,10 @@ class ConfigManager:
 
         return config
 
-    def get_api_config(self) -> Dict[str, Any]:
-        """Get API configuration section."""
+    def get_api_services(self) -> list:
+        """Get API services list."""
         config = self.load_config()
-        return config.get('api', {})
+        return config.get('api_services', [])
 
     def get_paths_config(self) -> Dict[str, str]:
         """Get paths configuration section."""
@@ -179,14 +247,11 @@ class ConfigManager:
 
 # Initialize global config manager
 _config_manager = ConfigManager()
-_api_config = _config_manager.get_api_config()
+_api_services = _config_manager.get_api_services()
 _paths_config = _config_manager.get_paths_config()
 
-# Export configuration variables for backward compatibility
-API_KEY_LIST = _api_config.get('api_key_list', [])
-BASE_URL = _api_config.get('base_url', 'https://generativelanguage.googleapis.com/v1beta/openai/')
-MODEL_LIST = _api_config.get('model_list', ['gemini-2.0-flash-exp'])
-REASONING_EFFORT = _api_config.get('reasoning_effort', 'none')
+# Export configuration variables
+API_SERVICES = _api_services
 
 EXCEL_FILE_PATH = _paths_config.get('excel_file_path', '')
 BACKUP_FOLDER_PATH = _paths_config.get('backup_folder_path', '')
