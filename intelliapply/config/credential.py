@@ -169,11 +169,8 @@ class ConfigManager:
                     print_(f"Error: Service {idx} - model is empty", "RED")
                     return False
                 
-                # Validate reasoning_effort
-                if not reasoning_effort:
-                    print_(f"Error: Service {idx} - reasoning_effort is empty", "RED")
-                    return False
-                if reasoning_effort not in ['none', 'low', 'medium', 'high']:
+                # Validate reasoning_effort (optional field)
+                if reasoning_effort and reasoning_effort not in ['none', 'low', 'medium', 'high']:
                     print_(f"Error: Service {idx} - reasoning_effort must be one of: none, low, medium, high", "RED")
                     return False
 

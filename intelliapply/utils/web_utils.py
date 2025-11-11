@@ -272,22 +272,28 @@ def process_webpage_content(content):
         api_key = service.get('api_key', '')
         base_url = service.get('base_url', '')
         model = service.get('model', '')
-        reasoning_effort = service.get('reasoning_effort', 'none')
+        reasoning_effort = service.get('reasoning_effort', '').strip()
         
         try:
             print_(f"Service {idx}: Sending content to {model} with API key {api_key[:10]}...")
             client = OpenAI(api_key=api_key, base_url=base_url)
 
-            response = client.beta.chat.completions.parse(
-                model=model,
-                reasoning_effort=reasoning_effort,
-                messages=[
+            # Build request parameters
+            request_params = {
+                "model": model,
+                "messages": [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": content}
                 ],
-                temperature=0,
-                response_format=JobInfo
-            )
+                "temperature": 0,
+                "response_format": JobInfo
+            }
+            
+            # Only add reasoning_effort if it's provided
+            if reasoning_effort:
+                request_params["reasoning_effort"] = reasoning_effort
+
+            response = client.beta.chat.completions.parse(**request_params)
 
             # Parse the response and convert Job_Title to Job Title
             result = response.choices[0].message.parsed
