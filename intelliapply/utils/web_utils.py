@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 from openai import OpenAI
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Comment
 from playwright.sync_api import sync_playwright
 
 from intelliapply.config.config import DOMAIN_KEYWORDS, COOKIE_PATH, HEADERS
@@ -208,7 +208,7 @@ def start_browser(app_path="/Applications/Microsoft Edge Beta.app/Contents/MacOS
 
 def add_cookie(cookie_path=COOKIE_PATH):
     # Prompt the user to paste the cookie in Netscape format
-    print("\n[*] Please paste the cookie in Netscape format (end with an empty line):")
+    print_("\nPlease paste the cookie in Netscape format (end with an empty line):")
     netscape_cookie = []
     while True:
         line = input()  # Accept multi-line input
@@ -273,7 +273,7 @@ def process_webpage_content(content):
         base_url = service.get('base_url', '')
         model = service.get('model', '')
         reasoning_effort = service.get('reasoning_effort', '').strip()
-        
+
         try:
             print_(f"Service {idx}: Sending content to {model} with API key {api_key[:10]}...")
             client = OpenAI(api_key=api_key, base_url=base_url)
@@ -288,7 +288,7 @@ def process_webpage_content(content):
                 "temperature": 0,
                 "response_format": JobInfo
             }
-            
+
             # Only add reasoning_effort if it's provided
             if reasoning_effort:
                 request_params["reasoning_effort"] = reasoning_effort
@@ -314,19 +314,47 @@ def process_webpage_content(content):
     return {"isValid": False}
 
 
-def remove_script_content(content):
+def remove_script_content(html_content: str) -> str:
     """
-    Remove all script tags and their content from HTML content.
+    Cleans HTML for job extraction to achieve "maximum compatibility" while reducing tokens.
+    This function only removes content that can be safely removed on any website with high 
+    token consumption and zero information value.
+    
+    It preserves all other tags, all attributes (class, id, itemprop, etc.) and all text 
+    content to ensure the LLM has sufficient context for extraction.
+    
+    Removal list:
+    1. Noise tags: <script>, <style>, <svg>, <link>, <noscript>
+    2. Layout tags: <header>, <footer>, <nav>, <aside>
+    3. HTML comments
     """
     try:
-        soup = BeautifulSoup(content, 'html.parser')
-        # Remove all script tags and their content
-        for script in soup.find_all('script'):
-            script.decompose()
-        return str(soup)
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # 1. Remove "noise" tags (high token, zero info)
+        tags_to_decompose = ['script', 'style', 'svg', 'link', 'noscript']
+        for tag in soup.find_all(tags_to_decompose):
+            tag.decompose()
+
+        # 2. Remove "Layout" tags (high token, low relevance for job info)
+        layout_tags_to_decompose = ['header', 'footer', 'nav', 'aside']
+        for tag in soup.find_all(layout_tags_to_decompose):
+            tag.decompose()
+        
+        # 3. Remove all HTML comments
+        for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
+            comment.extract()
+        
+        # 4. Remove excessive whitespace to compress tokens
+        cleaned_html = str(soup)
+        cleaned_html = re.sub(r'\n\s*\n', '\n', cleaned_html, flags=re.MULTILINE)
+        lines = (line.strip() for line in cleaned_html.splitlines())
+        compact_html = "\n".join(line for line in lines if line)
+        
+        return compact_html
     except Exception as e:
-        print_(f"Error removing script content: {str(e)}", "RED")
-        return content
+        print(f"Error cleaning HTML: {str(e)}")
+        return html_content
 
 
 def get_raw_requests(url):
@@ -528,7 +556,7 @@ def handle_duplicate_check(data, excel_manager):
         try:
             print_("Warning: This job entry already exists in the Excel file.", "RED")
             print(f"Duplicate Entry: {duplicate_entry}")
-            confirm = input(print_("[*] Add it anyway? (y/yes to confirm, any other key to cancel): ", color="BLUE",
+            confirm = input(print_("Add it anyway? (y/yes to confirm, any other key to cancel): ", color="BLUE",
                                    return_text=True)).lower()
             if confirm.lower() != 'y' and confirm.lower() != 'yes':
                 raise KeyboardInterrupt

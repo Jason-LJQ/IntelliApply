@@ -796,9 +796,11 @@ REASONING_EFFORT = "medium"               # For reasoning models
                   │
                   ▼
       ┌──────────────────────┐
-      │  Remove <script>     │
-      │  Process iframes     │
-      │  Extract text        │
+      │  Clean HTML          │
+      │ - Remove noise tags  │
+      │ - Remove layout tags │
+      │ - Preserve attributes│
+      │ - Process iframes    │
       └──────────┬───────────┘
                  │
                  ▼
@@ -881,6 +883,45 @@ def process_requests_content(content, redirect=True):
     4. Prevents infinite recursion with redirect=False flag
     """
 ```
+
+### HTML Content Cleaning
+
+**Function**: `remove_script_content()` (utils/web_utils.py:317-358)
+
+**Design Philosophy**: "Maximum Compatibility" approach - only removes universally safe-to-remove, high-token content while preserving all semantic information that could help LLM extraction.
+
+**Removal Strategy**:
+
+```python
+def remove_script_content(html_content: str) -> str:
+    """
+    Cleans HTML for job extraction to achieve "maximum compatibility" while reducing tokens.
+    Only removes content that can be safely removed on any website with high token 
+    consumption and zero information value.
+    
+    It preserves all other tags, all attributes (class, id, itemprop, etc.) and all text 
+    content to ensure the LLM has sufficient context for extraction.
+    """
+```
+
+**Removed Content**:
+1. **Noise tags**: `<script>`, `<style>`, `<svg>`, `<link>`, `<noscript>` - High token count, zero information value
+2. **Layout tags**: `<header>`, `<footer>`, `<nav>`, `<aside>` - High token count, unlikely to contain core JD info
+3. **HTML comments**: All comment nodes removed
+
+**Preserved Content**:
+- **All HTML attributes**: `class`, `id`, `itemprop`, `data-*`, etc. - Preserved for semantic context
+- **All text content**: Complete text nodes retained
+- **All structural tags**: `<div>`, `<span>`, `<p>`, `<h1-h6>`, etc. - Preserved for context
+
+**Token Optimization**:
+- Collapses multiple consecutive empty lines into single newline
+- Strips leading/trailing whitespace from each line
+- Removes empty lines entirely
+
+**Key Design Decision**: Unlike previous versions that removed all attributes except `href` on `<a>` tags, the current implementation preserves **all attributes** to maximize LLM context. This ensures semantic information encoded in attributes (like `itemprop`, `class` names, `data-*` attributes) remains available for extraction.
+
+**Usage**: Called automatically in `process_requests_content()` and `fetch_with_playwright()` before sending content to LLM.
 
 ### Local Backup System
 
