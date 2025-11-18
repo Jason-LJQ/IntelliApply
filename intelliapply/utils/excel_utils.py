@@ -6,6 +6,7 @@ from openpyxl.styles import PatternFill
 import pandas as pd
 import os
 import shutil
+import tempfile
 from datetime import datetime
 
 from intelliapply.utils.print_utils import print_, print_results
@@ -630,8 +631,9 @@ class ExcelManager:
             if not self._check_for_write_conflict():
                 return False
 
-            # Create backup in /tmp directory
-            backup_filename = f"/tmp/job_application_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            # Create backup using system temp directory
+            temp_dir = tempfile.gettempdir()
+            backup_filename = os.path.join(temp_dir, f"job_application_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
             shutil.copy2(self.file_path, backup_filename)
             print_(f"\nBackup created at {backup_filename}")
 
@@ -684,7 +686,7 @@ class ExcelManager:
         """
         Marks the 'Status' cell at the given row index with a red fill color.
         Updates the 'Result Date' column with current date.
-        Also creates a backup of the file in /tmp directory.
+        Also creates a backup of the file in system temp directory.
 
         Args:
             row_index: The row index to mark (1-indexed, including header row)
@@ -698,7 +700,7 @@ class ExcelManager:
         """
         Marks the 'Status' cell at the given row index with a yellow fill color.
         Updates the 'Processed Date' column with current date.
-        Also creates a backup of the file in /tmp directory.
+        Also creates a backup of the file in system temp directory.
 
         Args:
             row_index: The row index to mark (1-indexed, including header row)
@@ -712,7 +714,7 @@ class ExcelManager:
         """
         Marks the 'Status' cell at the given row index with a green fill color.
         Updates the 'Result Date' column with current date.
-        Also creates a backup of the file in /tmp directory.
+        Also creates a backup of the file in system temp directory.
 
         Args:
             row_index: The row index to mark (1-indexed, including header row)
