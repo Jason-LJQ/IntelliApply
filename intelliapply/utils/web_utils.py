@@ -278,7 +278,7 @@ def process_webpage_content(content):
             print_(f"Service {idx}: Sending content to {model} with API key {api_key[:10]}...")
             client = OpenAI(api_key=api_key, base_url=base_url)
 
-            # Build request parameters
+            # Build request parameters with generic JSON Object mode for better compatibility
             request_params = {
                 "model": model,
                 "messages": [
@@ -286,17 +286,31 @@ def process_webpage_content(content):
                     {"role": "user", "content": content}
                 ],
                 "temperature": 0,
-                "response_format": JobInfo
+                # Use generic json_object type instead of SDK-specific response_format class
+                "response_format": {"type": "json_object"},
             }
 
             # Only add reasoning_effort if it's provided
             if reasoning_effort:
                 request_params["reasoning_effort"] = reasoning_effort
 
-            response = client.beta.chat.completions.parse(**request_params)
+            # Use standard create method instead of beta.parse
+            response = client.chat.completions.create(**request_params)
 
-            # Parse the response and convert Job_Title to Job Title
-            result = response.choices[0].message.parsed
+            # Get raw content (could be string or dict depending on API)
+            raw_content = response.choices[0].message.content
+
+            # Smart parsing: handle both String and Dict types
+            if isinstance(raw_content, str):
+                # If string (common case), use model_validate_json
+                result = JobInfo.model_validate_json(raw_content)
+            elif isinstance(raw_content, dict):
+                # If already dict (e.g., Cloudflare), use model_validate
+                result = JobInfo.model_validate(raw_content)
+            else:
+                raise ValueError(f"Unexpected content type: {type(raw_content)}")
+
+            # Return result (keep original logic)
             return {
                 "isValid": result.isValid,
                 "Company": result.Company,
