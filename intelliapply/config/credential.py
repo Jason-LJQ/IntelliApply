@@ -77,7 +77,6 @@ class ConfigManager:
             print_("=" * 60)
             input()
 
-
     def _ensure_config_valid(self) -> None:
         """
         Ensure the configuration is valid.
@@ -139,7 +138,7 @@ class ConfigManager:
             if not api_services:
                 print_("Error: No API services configured", "RED")
                 return False
-            
+
             # Validate each service
             for idx, service in enumerate(api_services, 1):
                 # Check required fields are not empty
@@ -147,7 +146,7 @@ class ConfigManager:
                 base_url = service.get('base_url', '').strip()
                 model = service.get('model', '').strip()
                 reasoning_effort = service.get('reasoning_effort', '').strip()
-                
+
                 # Validate api_key
                 if not api_key:
                     print_(f"Error: Service {idx} - api_key is empty", "RED")
@@ -155,7 +154,7 @@ class ConfigManager:
                 if 'xxxx' in api_key.lower():
                     print_(f"Error: Service {idx} - api_key contains placeholder value", "RED")
                     return False
-                
+
                 # Validate base_url
                 if not base_url:
                     print_(f"Error: Service {idx} - base_url is empty", "RED")
@@ -163,14 +162,14 @@ class ConfigManager:
                 if not self._is_valid_url(base_url):
                     print_(f"Error: Service {idx} - base_url is not a valid URL: {base_url}", "RED")
                     return False
-                
+
                 # Validate model
                 if not model:
                     print_(f"Error: Service {idx} - model is empty", "RED")
                     return False
-                
+
                 # Validate reasoning_effort (optional field)
-                if reasoning_effort and reasoning_effort not in ['none', 'low', 'medium', 'high']:
+                if reasoning_effort and reasoning_effort not in ['none', 'minimal', 'low', 'medium', 'high']:
                     print_(f"Error: Service {idx} - reasoning_effort must be one of: none, low, medium, high", "RED")
                     return False
 
@@ -185,7 +184,7 @@ class ConfigManager:
             if (not db_path or '/path/to/' in db_path) and (not excel_path or '/path/to/' in excel_path):
                 print_("Error: database_file_path is empty or contains placeholder", "RED")
                 return False
-            
+
             if not backup_path or '/path/to/' in backup_path:
                 print_("Error: backup_folder_path is empty or contains placeholder", "RED")
                 return False
@@ -195,7 +194,7 @@ class ConfigManager:
         except Exception as e:
             print_(f"Config validation error: {e}", "RED")
             return False
-    
+
     @staticmethod
     def _is_valid_url(url: str) -> bool:
         """
