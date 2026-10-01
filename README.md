@@ -36,6 +36,9 @@ Perfect for anyone managing multiple job applications and tired of spreadsheet d
 ![Search jobs and mark results](images/Screenshot%202.png)
 *Search and update application status with simple commands*
 
+![Web UI](images/Screenshot%203.png)
+*Built-in Web UI for searching, sorting, editing, and exporting*
+
 ---
 
 ## Key Features
