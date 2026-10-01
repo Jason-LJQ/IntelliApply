@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>IntelliApply</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; display: flex; flex-direction: column; font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #222; }
+  header { padding: 10px 14px; border-bottom: 1px solid #ddd; background: #fafafa; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .toolbar h1 { font-size: 16px; margin: 0 8px 0 0; }
+  #search { width: 280px; }
+  input, select, button, textarea, .button { font: inherit; padding: 4px 6px; border: 1px solid #bbb; border-radius: 4px; background: #fff; }
+  button, .button { cursor: pointer; color: #222; text-decoration: none; }
+  button:hover, .button:hover { background: #eee; }
+  .spacer { flex: 1; }
+  #summary, #count { color: #666; }
+  #summary { margin-top: 6px; }
+  #add-form { display: none; margin-top: 8px; gap: 6px; flex-wrap: wrap; align-items: center; }
+  #add-form.open { display: flex; }
+  #add-form input { width: 150px; }
+  main { flex: 1; overflow: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #e4e4e4; padding: 4px 6px; text-align: left; vertical-align: top; }
+  td { white-space: pre-line; word-break: break-word; }
+  th { position: sticky; top: 0; background: #f2f2f2; cursor: pointer; user-select: none; white-space: nowrap; z-index: 1; }
+  tbody tr:hover { background: #f7fbff; }
+  td.editable { cursor: text; }
+  td textarea { width: 100%; min-width: 120px; resize: vertical; }
+  td.id { color: #999; }
+  td.status select { border: none; background: transparent; }
+  .REJECTED { background: #f9b9b9; }
+  .PROCESSING { background: #fff2a0; }
+  .OFFER { background: #b8efb1; }
+  .delete { border: none; background: none; color: #c33; padding: 0 4px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="toolbar">
+    <h1>IntelliApply</h1>
+    <input id="search" placeholder="Search... (press / to focus)" autocomplete="off">
+    <select id="mode" title="Smart: same as CLI search (company, initials, job title). Contains: text in any field.">
+      <option value="smart">Smart</option>
+      <option value="contains">Contains</option>
+    </select>
+    <select id="status-filter">
+      <option value="ALL">All statuses</option>
+      <option value="">No status</option>
+      <option value="PROCESSING">Processing</option>
+      <option value="REJECTED">Rejected</option>
+      <option value="OFFER">Offer</option>
+    </select>
+    <span id="count"></span>
+    <span class="spacer"></span>
+    <button id="toggle-add">+ Add record</button>
+    <a class="button" href="/api/export">Export Excel</a>
+  </div>
+  <form id="add-form"></form>
+  <div id="summary"></div>
+</header>
+<main>
+  <table>
+    <thead><tr id="head"></tr></thead>
+    <tbody id="body"></tbody>
+  </table>
+</main>
+<script>
+const STATUSES = [['', '—'], ['PROCESSING', '→ Processing'], ['REJECTED', '⨉ Rejected'], ['OFFER', '✔ Offer']];
+const $ = id => document.getElementById(id);
+let fields = [], jobs = [], smartIds = null, sortKey = 'id', sortDir = -1;
+
+async function api(method, url, body) {
+  const options = {method, headers: method === 'GET' ? {} : {'Content-Type': 'application/json'}};
+  if (body !== undefined) options.body = JSON.stringify(body);
+  const res = await fetch(url, options);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.error || res.statusText), {status: res.status, data});
+  return data;
+}
+
+function el(tag, props = {}, ...children) {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children);
+  return node;
+}
+
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Reload all records, re-apply the current search and refresh the summary
+async function refresh() {
+  const data = await api('GET', '/api/jobs');
+  if (!fields.length) init(data.fields);
+  jobs = data.jobs;
+  await applySearch();
+  const s = await api('GET', '/api/summary');
+  $('summary').textContent = `Total ${s.total} · Rejected ${s.rejected} · Processing ${s.processing} · Offers ${s.offers}` +
+    ` · Rejection rate ${s.rejection_rate.toFixed(1)}% · Processing rate ${s.processing_rate.toFixed(1)}%` +
+    ` · Offer rate ${s.offer_rate.toFixed(1)}% (offers/processing)`;
+}
+
+function init(serverFields) {
+  fields = serverFields;
+  const form = $('add-form');
+  for (const f of fields) form.append(el('input', {name: f, placeholder: f}));
+  form.append(el('button', {type: 'submit', textContent: 'Add'}));
+  form.elements['Applied Date'].value = today();
+  renderHead();
+}
+
+async function applySearch() {
+  const q = $('search').value.trim();
+  smartIds = null;
+  if (q && $('mode').value === 'smart') {
+    const data = await api('GET', '/api/jobs?q=' + encodeURIComponent(q));
+    smartIds = new Set(data.jobs.map(j => j.id));
+  }
+  render();
+}
+
+function visibleJobs() {
+  const q = $('search').value.trim().toLowerCase(), status = $('status-filter').value;
+  const matches = j => !q || (smartIds ? smartIds.has(j.id) : fields.some(f => j[f].toLowerCase().includes(q)));
+  return jobs
+    .filter(j => (status === 'ALL' || j.Status === status) && matches(j))
+    .sort((a, b) => sortDir * (sortKey === 'id' ? a.id - b.id : String(a[sortKey]).localeCompare(String(b[sortKey]))));
+}
+
+function renderHead() {
+  const cols = [['id', '#'], ['Status', 'Status'], ...fields.map(f => [f, f]), [null, '']];
+  $('head').replaceChildren(...cols.map(([key, label]) => {
+    const th = el('th', {textContent: label + (key === sortKey ? (sortDir > 0 ? ' ▲' : ' ▼') : '')});
+    if (key) th.onclick = () => { sortDir = key === sortKey ? -sortDir : 1; sortKey = key; renderHead(); render(); };
+    return th;
+  }));
+}
+
+function render() {
+  const rows = visibleJobs();
+  $('body').replaceChildren(...rows.map(rowElement));
+  $('count').textContent = `${rows.length} / ${jobs.length} records`;
+}
+
+function rowElement(job) {
+  const select = el('select', {}, ...STATUSES.map(([value, label]) => el('option', {value, textContent: label})));
+  select.value = job.Status;
+  select.onchange = () => setStatus(job, select.value);
+
+  const cells = fields.map(f => {
+    const td = el('td', {className: 'editable', title: 'Double-click to edit'});
+    if (f === 'Link' && /^https?:\/\//i.test(job[f])) td.append(el('a', {href: job[f], target: '_blank', textContent: job[f]}));
+    else td.textContent = job[f];
+    td.ondblclick = () => editCell(td, job, f);
+    return td;
+  });
+
+  const del = el('button', {className: 'delete', title: 'Delete record', textContent: '✕'});
+  del.onclick = () => deleteJob(job);
+  return el('tr', {}, el('td', {className: 'id', textContent: job.id}),
+    el('td', {className: 'status ' + job.Status}, select), ...cells, el('td', {}, del));
+}
+
+function editCell(td, job, field) {
+  if (td.querySelector('textarea')) return;
+  const input = el('textarea', {value: job[field], rows: Math.max(1, job[field].split('\n').length)});
+  td.replaceChildren(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = async save => {
+    if (done) return;
+    done = true;
+    if (save && input.value !== job[field]) {
+      try { await api('PATCH', `/api/jobs/${job.id}`, {[field]: input.value}); } catch (e) { alert(e.message); }
+      await refresh();
+    } else render();
+  };
+  // Enter saves (Shift+Enter for new line), Escape cancels, leaving the cell saves
+  input.onkeydown = e => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') finish(false);
+  };
+  input.onblur = () => finish(true);
+}
+
+async function setStatus(job, status) {
+  try {
+    // Marking a status also updates its date column, same as the CLI
+    if (status) await api('POST', `/api/jobs/${job.id}/mark`, {status});
+    else await api('PATCH', `/api/jobs/${job.id}`, {Status: ''});
+  } catch (e) { alert(e.message); }
+  await refresh();
+}
+
+async function deleteJob(job) {
+  if (!confirm(`Delete #${job.id}: ${job['Job Title']} at ${job.Company}?`)) return;
+  try { await api('DELETE', `/api/jobs/${job.id}`); } catch (e) { alert(e.message); }
+  await refresh();
+}
+
+$('add-form').onsubmit = async e => {
+  e.preventDefault();
+  const form = e.target;
+  const record = Object.fromEntries(fields.map(f => [f, form.elements[f].value]));
+  try {
+    await api('POST', '/api/jobs', record);
+  } catch (err) {
+    const dup = err.data && err.data.duplicate;
+    if (!dup) return alert(err.message);
+    if (!confirm(`This job entry already exists (#${dup.id}: ${dup['Job Title']} at ${dup.Company}). Add it anyway?`)) return;
+    try { await api('POST', '/api/jobs', {...record, force: true}); } catch (err2) { return alert(err2.message); }
+  }
+  form.reset();
+  form.elements['Applied Date'].value = today();
+  await refresh();
+};
+
+let searchTimer;
+$('search').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(applySearch, 200); };
+$('mode').onchange = applySearch;
+$('status-filter').onchange = render;
+$('toggle-add').onclick = () => $('add-form').classList.toggle('open');
+document.addEventListener('keydown', e => {
+  if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+    e.preventDefault();
+    $('search').focus();
+  }
+});
+
+refresh().catch(e => alert(e.message));
+</script>
+</body>
+</html>

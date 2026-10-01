@@ -532,15 +532,15 @@ def validate_job_data(result, source="LLM Backend"):
     return result
 
 
-def prepare_excel_data(result):
+def prepare_job_data(result):
     """
-    Prepare validated job data for Excel insertion.
+    Prepare validated job data for database insertion.
     
     Args:
         result: Validated job data dictionary
     
     Returns:
-        dict: Data formatted for Excel
+        dict: Data formatted for database
     """
     from datetime import datetime
     return {
@@ -554,21 +554,21 @@ def prepare_excel_data(result):
     }
 
 
-def handle_duplicate_check(data, excel_manager):
+def handle_duplicate_check(data, job_db):
     """
     Handle duplicate entry checking with user confirmation.
 
     Args:
-        data: Excel data dictionary
-        excel_manager: ExcelManager instance
+        data: Job data dictionary
+        job_db: JobDatabase instance
 
     Returns:
         bool: True if should proceed, False if cancelled
     """
-    duplicate_entry = excel_manager.check_duplicate_entry(new_data=data)
+    duplicate_entry = job_db.check_duplicate_entry(new_data=data)
     if duplicate_entry is not None:
         try:
-            print_("Warning: This job entry already exists in the Excel file.", "RED")
+            print_("Warning: This job entry already exists in the database.", "RED")
             print(f"Duplicate Entry: {duplicate_entry}")
             confirm = input(print_("Add it anyway? (y/yes to confirm, any other key to cancel): ", color="BLUE",
                                    return_text=True)).lower()
@@ -585,9 +585,9 @@ def display_job_result(data):
     Display the successfully processed job data.
     
     Args:
-        data: Excel data dictionary
+        data: Job data dictionary
     """
-    print_(f"Successfully extracted and added to Excel:", "GREEN")
+    print_(f"Successfully extracted and added to database:", "GREEN")
     print(f"Company: {data['Company']}")
     print(f"Location: {data['Location']}")
     print(f"Job Title: {data['Job Title']}")
@@ -596,40 +596,40 @@ def display_job_result(data):
     print(f"Link: {data['Link']}")
 
 
-def process_validated_job_data(result, excel_manager, source="LLM Backend"):
+def process_validated_job_data(result, job_db, source="LLM Backend"):
     """
-    Process validated job data: prepare for Excel, check duplicates, and save.
+    Process validated job data: prepare for database, check duplicates, and save.
 
     Args:
         result: Validated job data dictionary
-        excel_manager: ExcelManager instance
+        job_db: JobDatabase instance
         source: String describing the data source
 
     Returns:
         bool: True if successfully processed, False otherwise
     """
-    # Prepare data for Excel
-    data = prepare_excel_data(result)
+    # Prepare data for database
+    data = prepare_job_data(result)
 
     # Check for duplicates
-    if not handle_duplicate_check(data, excel_manager):
+    if not handle_duplicate_check(data, job_db):
         return False
 
-    # Add to Excel
-    excel_manager.append_data_to_excel(data=[data])
+    # Add to database
+    job_db.append_data(data=[data])
 
     # Display result
     display_job_result(data)
     return True
 
 
-def handle_webpage_content(content, excel_manager):
+def handle_webpage_content(content, job_db):
     """
-    Handle webpage content: process it and add to Excel if valid
+    Handle webpage content: process it and add to database if valid
 
     Args:
         content: Webpage content or URL
-        excel_manager: ExcelManager instance
+        job_db: JobDatabase instance
     """
     # Remove view-source: prefix if present
     content = content.strip()
@@ -688,16 +688,16 @@ def handle_webpage_content(content, excel_manager):
             return
 
     # Process the validated result
-    process_validated_job_data(result, excel_manager, "LLM Backend")
+    process_validated_job_data(result, job_db, "LLM Backend")
 
 
-def handle_json_content(json_content, excel_manager):
+def handle_json_content(json_content, job_db):
     """
-    Handle JSON input: parse and validate job data, then add to Excel if valid.
+    Handle JSON input: parse and validate job data, then add to database if valid.
 
     Args:
         json_content: JSON string containing job information
-        excel_manager: ExcelManager instance
+        job_db: JobDatabase instance
 
     Returns:
         bool: True if successfully processed, False otherwise
@@ -726,7 +726,7 @@ def handle_json_content(json_content, excel_manager):
         backup_url_local_async(url, company, job_title)
 
     # Process the validated result
-    return process_validated_job_data(validated_result, excel_manager, "JSON Input")
+    return process_validated_job_data(validated_result, job_db, "JSON Input")
 
 
 def get_backup_directory():

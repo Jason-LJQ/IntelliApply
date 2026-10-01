@@ -1,6 +1,9 @@
 import os
 
 COOKIE_PATH = os.path.join(os.path.dirname(__file__), "cookie.pkl")
+# Local web UI address
+WEB_HOST = "127.0.0.1"
+WEB_PORT = 7779
 DOMAIN_KEYWORDS = {"https://www.linkedin.com/mypreferences/d/categories/account": ["preferred", "demographic"],
                    "https://app.joinhandshake.com": ["explore", "people"],
                 #    "https://profile.indeed.com/": ["resume", "qualifications"]

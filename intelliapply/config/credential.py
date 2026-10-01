@@ -176,12 +176,14 @@ class ConfigManager:
 
             # Check paths section
             paths = config.get('paths', {})
+            db_path = paths.get('database_file_path', '').strip()
             excel_path = paths.get('excel_file_path', '').strip()
             backup_path = paths.get('backup_folder_path', '').strip()
 
             # Validate paths are not empty or placeholder
-            if not excel_path or '/path/to/' in excel_path:
-                print_("Error: excel_file_path is empty or contains placeholder", "RED")
+            # Legacy configs without database_file_path derive it from excel_file_path
+            if (not db_path or '/path/to/' in db_path) and (not excel_path or '/path/to/' in excel_path):
+                print_("Error: database_file_path is empty or contains placeholder", "RED")
                 return False
             
             if not backup_path or '/path/to/' in backup_path:
@@ -250,5 +252,7 @@ _paths_config = _config_manager.get_paths_config()
 # Export configuration variables
 API_SERVICES = _api_services
 
+# Legacy Excel file, imported once when the database is created
 EXCEL_FILE_PATH = _paths_config.get('excel_file_path', '')
+DB_FILE_PATH = _paths_config.get('database_file_path', '') or os.path.splitext(EXCEL_FILE_PATH)[0] + '.db'
 BACKUP_FOLDER_PATH = _paths_config.get('backup_folder_path', '')

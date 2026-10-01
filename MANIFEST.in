@@ -11,6 +11,9 @@ include intelliapply/config/credential-example.yaml
 include intelliapply/utils/package.json
 include intelliapply/utils/package-lock.json
 
+# Include web UI page
+include intelliapply/web/index.html
+
 # Include images for documentation
 recursive-include images *.png *.jpg *.jpeg
 

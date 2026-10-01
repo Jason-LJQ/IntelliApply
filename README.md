@@ -4,7 +4,7 @@
 
 Track your job applications effortlessly with LLM-powered information extraction, smart search, and multi-status workflow management. Simply paste a job URL and let AI do the rest.
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 See [DESIGN.md](DESIGN.md) for technical showcase, architecture deep-dive, performance analysis, and more.
@@ -15,7 +15,7 @@ Stars are welcomed! ^_^
 
 ## What is IntelliApply?
 
-IntelliApply is a **command-line job application tracker** that eliminates the tedium of manual data entry. It combines:
+IntelliApply is a **command-line job application tracker** (with a local web UI) that eliminates the tedium of manual data entry. It combines:
 
 - **AI-Powered Extraction**: Paste any job URL, and LLM automatically extracts company, location, job title, and more
 - **Smart Search**: Find applications instantly by company name, initials, or job title
@@ -40,17 +40,12 @@ Perfect for anyone managing multiple job applications and tired of spreadsheet d
 
 ## Key Features
 
-### High-Performance Caching Architecture
-IntelliApply uses an intelligent caching system that dramatically improves performance:
-- **Smart Cache**: DataFrame and workbook cached in memory, automatically invalidated only when file is externally modified
-- **Dual Cache Strategy**: Both pandas DataFrame (for fast reads) and openpyxl Workbook (for fast writes) kept in sync
-- **Internal Status Column**: Cell colors converted to `_internal_status` field in DataFrame for instant access
-- **mtime-Based Detection**: Uses file modification timestamps to detect external changes (2-second tolerance)
-- **Decorator-Driven**: `@sync` and `@save` decorators elegantly handle cache synchronization and persistence
-- **Conflict Detection**: Warns before overwriting external changes to prevent data loss
-- **Cache Integrity**: Deep copy for read-only operations, synchronized updates for writes, automatic index management
-
-For continuous search operations, response time is **near-instant** as data is read from memory instead of disk.
+### SQLite Storage & Web UI
+Your data lives in a single local SQLite file (Python standard library, no extra dependencies):
+- **Simple & robust**: Short-lived connection per operation, so the CLI and the web UI safely share the same data
+- **Automatic backups**: The database is copied to your system temp directory before marking statuses or deleting records
+- **Built-in Web UI**: Starts automatically with the CLI at `http://127.0.0.1:7779` (localhost only) - search, sort, edit cells inline, change status, add and delete records
+- **Excel when you need it**: Import an existing Excel file automatically on first run, export any time with the `export` command
 
 ### AI-Powered Extraction
 Paste any job posting URL and watch as AI automatically extracts:
@@ -101,9 +96,10 @@ IntelliApply is flexible about how you add jobs:
 - **Cookie persistence**: Stay logged into LinkedIn and Handshake
 
 ### Data Management
-- **Excel storage**: Familiar format with color-coded status cells
+- **SQLite storage**: A single local `.db` file, editable through the CLI or the Web UI
+- **Excel import/export**: Legacy Excel files are imported automatically; export to color-coded `.xlsx` with `export`
 - **Duplicate detection**: Warns before adding the same job twice
-- **Schema validation**: Automatic migration for backward compatibility
+- **Schema upgrade**: Missing columns are added to the database automatically
 - **Local backups**: Saves HTML copies of job postings for offline reference
 
 ## Quick Start
@@ -127,7 +123,7 @@ pip install git+https://github.com/Jason-LJQ/IntelliApply.git
 
 # Configure credentials
 intelliapply  # Run the command
-# Edit intelliapply/config/credential.py with your settings
+# Edit ~/intelliApply_config/config.yaml with your settings
 ```
 
 #### Option 2: Install from Source
@@ -177,9 +173,8 @@ pip install -e .  # or: uv pip install -e .
 - On first run, IntelliApply creates `~/intelliApply_config/config.yaml`
 - The config file will open in your default editor automatically
 - Edit the file with your settings:
-  - `api.api_key_list`: Your LLM API key(s)
-  - `api.base_url`: API endpoint URL
-  - `paths.excel_file_path`: Where to store your job data
+  - `api_services`: Your LLM API service(s) (`api_key`, `base_url`, `model`, optional `reasoning_effort`)
+  - `paths.database_file_path`: Where to store your job data (SQLite file)
   - `paths.backup_folder_path`: Where to save job posting backups
 - Save and press Enter to continue
 
@@ -191,21 +186,36 @@ Your configuration is stored at `~/intelliApply_config/config.yaml`. Edit it any
 
 ```yaml
 # LLM API Configuration
-api:
-  api_key_list:  # Add multiple keys for fallback
-    - "your-api-key-here"
-  base_url: "https://api.provider.com/v1"  # OpenAI-compatible endpoint
-  model_list:  # Model priority order
-    - "model-name"
-  reasoning_effort: "none"
+# List of API services, tried in order from top to bottom
+api_services:
+  - api_key: "your-api-key-here"
+    base_url: "https://api.provider.com/v1"  # OpenAI-compatible endpoint
+    model: "model-name"
+    reasoning_effort: "none"  # Optional: none, low, medium, high
+
+  # Add more services as fallback
+  # - api_key: "sk-proj-xxxxx"
+  #   base_url: "https://api.openai.com/v1/"
+  #   model: "gpt-4o"
 
 # Storage Configuration
 paths:
-  excel_file_path: "/path/to/your/job_applications.xlsx"
+  database_file_path: "/path/to/your/job_applications.db"
+  # Optional: legacy Excel file, imported once when the database is first created
+  # excel_file_path: "/path/to/your/job_applications.xlsx"
   backup_folder_path: "/path/to/job_backups"
 ```
 
-IntelliApply will create the Excel file automatically on first run.
+IntelliApply will create the database file automatically on first run.
+
+### Migrating from Excel
+
+Earlier versions stored data in an Excel file. If your config still has `paths.excel_file_path` (and no `database_file_path`), nothing breaks:
+- The database path is derived by replacing the `.xlsx` extension with `.db`
+- On first run, when the database file does not exist yet, the Excel file is imported automatically (status is read from the Status cell fill color)
+- The original Excel file is left untouched and is no longer updated afterwards
+
+You can also set `database_file_path` explicitly and keep `excel_file_path` for the one-time import.
 
 ## Usage Guide
 
@@ -237,7 +247,7 @@ IntelliApply will:
 2. Send content to LLM for extraction
 3. Validate required fields (Company, Location, Job Title)
 4. Check for duplicates
-5. Save to Excel with current date
+5. Save to the database with current date
 6. Backup HTML locally (async, doesn't block)
 
 **Alternative methods:**
@@ -352,6 +362,36 @@ System will:
 
 ---
 
+#### 6. Using the Web UI
+
+The Web UI starts automatically in the background when the CLI starts. Type `open` to launch it in your browser, or visit `http://127.0.0.1:8765`. To run it without the CLI:
+
+```bash
+python -m intelliapply.web.server
+```
+
+- **Search**: "Smart" mode uses the same algorithm as the CLI; "Contains" mode matches text in any field. Filter by status with the dropdown
+- **Sort**: Click a column header (click again to reverse)
+- **Edit**: Double-click any cell. `Enter` saves, `Shift+Enter` inserts a new line, `Esc` cancels, clicking away saves
+- **Status**: Use the status dropdown in a row. Setting a status also stamps its date column, like the CLI; choosing no status just clears it
+- **Add / delete**: "+ Add record" opens a form (with a duplicate warning); each row has a delete button with confirmation
+- **Statistics**: Summary line shows totals and rates
+- **Export**: "Export Excel" downloads an `.xlsx` file
+
+The server only listens on localhost, and all write requests must be `application/json`, so other websites cannot modify your data. If the port is already in use (e.g. another IntelliApply instance), the CLI prints a warning and continues without the Web UI.
+
+---
+
+#### 7. Exporting to Excel
+
+```bash
+> export
+```
+
+Writes `job_applications_YYYYmmdd_HHMMSS.xlsx` next to the database file. The header row is `Status` + the data columns; the Status cell is empty but filled red/yellow/green.
+
+---
+
 ### All Commands
 
 | Command | Description |
@@ -363,7 +403,8 @@ System will:
 | `<markdown table>` | Add job from table format |
 | `<number><action>` | Mark status: `1p` (processing), `2r` (rejected), `3o` (offer) |
 | `summary` | View application statistics |
-| `open` | Open Excel file in default application |
+| `open` | Open the web UI in your default browser |
+| `export` | Export all records to a timestamped Excel file next to the database |
 | `cookie` | Update session cookies for authenticated sites |
 | `delete` | Delete last added entry (with confirmation) |
 | `last` | Show last added entry |
@@ -375,11 +416,11 @@ System will:
 
 ### Tips & Tricks
 
-1. **Multiple API keys**: Add multiple API keys to `API_KEY_LIST` for automatic fallback if one hits rate limits
+1. **Multiple API services**: Add several entries under `api_services` in `config.yaml` for automatic fallback if one hits rate limits
 2. **Batch adding**: You can quickly add multiple jobs by pasting URLs one after another
 3. **Search shortcuts**: Use 2-3 letter abbreviations for quick company lookup (e.g., "gs" for Goldman Sachs)
 4. **Status workflow**: Start with blank → mark as Processing when you hear back → mark as Rejected/Offer when finalized
-5. **Excel editing**: You can open the Excel file directly (`open` command) and manually edit if needed
+5. **Web UI editing**: Use the `open` command to fix typos or change statuses in the browser - double-click any cell to edit
 6. **Terminal width**: Terminal automatically adjusts width to fit content - no more new-line text!
 
 ---
@@ -400,7 +441,7 @@ User Input → Input Detection → Processing Pipeline → LLM Extraction → Va
 3. **LLM Extraction**: Send content to OpenAI-compatible API with structured prompt
 4. **Validation**: Pydantic models ensure all required fields present
 5. **Duplicate Check**: Compare with existing entries
-6. **Storage**: Save to Excel with color-coded status cell
+6. **Storage**: Save to the SQLite database
 7. **Backup**: Asynchronously save HTML copy to local storage
 
 ### LLM Prompt Engineering
@@ -440,10 +481,12 @@ IntelliApply works with any **OpenAI-compatible API**:
 - **Self-hosted models** (Ollama, vLLM, LocalAI)
 - **Other providers** (Groq, Together AI, Replicate)
 
-Configure in `config/credential.py`:
-```python
-BASE_URL = "https://your-provider.com/v1"
-MODEL_LIST = ["your-model-name"]
+Configure in `~/intelliApply_config/config.yaml`:
+```yaml
+api_services:
+  - api_key: "your-api-key"
+    base_url: "https://your-provider.com/v1"
+    model: "your-model-name"
 ```
 
 ### Performance
@@ -460,15 +503,19 @@ MODEL_LIST = ["your-model-name"]
 
 ### Data Format
 
-**Excel Schema:**
+**Database schema** (SQLite table `jobs`):
 ```
-Status | Company | Location | Job Title | Code | Type | Applied Date | Processed Date | Result Date | Link
+id (auto-increment) | Status | Company | Location | Job Title | Code | Type | Applied Date | Processed Date | Result Date | Link
 ```
 
-- `Status`: Hidden column with cell fill color (Red/Yellow/Green)
+- `id`: Auto-increment primary key, used by the Web UI and status marking
+- `Status`: Empty, `REJECTED`, `PROCESSING` or `OFFER`
 - `Applied Date`: Auto-generated on entry creation (YYYY-MM-DD)
 - `Processed Date`: Updated when marked as Processing
 - `Result Date`: Updated when marked as Rejected or Offer
+- All columns except `id` are stored as text; missing columns are added automatically
+
+**Excel import/export format**: Header row `Status` + the data columns. The Status cell has no value; its fill color (red/yellow/green) represents Rejected/Processing/Offer.
 
 ### Technical Details
 
@@ -496,7 +543,7 @@ Want to dive deeper? See **[DESIGN.md](DESIGN.md)** for:
 
 **Q: Search doesn't find jobs I know exist**
 - Try searching by initials or abbreviation
-- Check spelling of company name in Excel file
+- Check spelling of company name in the Web UI (double-click a cell to fix it)
 - Use job title keywords instead of company name
 
 **Q: Playwright times out on certain sites**
@@ -509,10 +556,14 @@ Want to dive deeper? See **[DESIGN.md](DESIGN.md)** for:
 - Log into sites manually through opened browser tabs
 - Paste cookie in Netscape format when prompted
 
-**Q: Excel file has missing columns**
-- System will detect and prompt for backup + migration
-- Confirm migration to create new file with correct schema
-- Manually copy data from backup if needed
+**Q: My old Excel data did not show up**
+- The Excel file is only imported when the database file does not exist yet
+- Make sure `paths.excel_file_path` still points to the old file, and remove/rename the `.db` file to trigger a fresh import (keep a copy if you have made changes since)
+
+**Q: Web UI is not available**
+- If port 8765 is in use, the CLI prints a warning and runs without its own Web UI server
+- If the port is used by another IntelliApply instance (same config), `open` still works because that instance serves the same database
+- Otherwise, free the port (or change `WEB_PORT` in `intelliapply/config/config.py`) and restart
 
 ---
 
@@ -520,8 +571,8 @@ Want to dive deeper? See **[DESIGN.md](DESIGN.md)** for:
 
 Contributions are welcome! Areas for improvement:
 
-- [ ] Web interface (React/Vue frontend)
-- [ ] Database migration (SQLite/PostgreSQL)
+- [x] Web interface (local single-page UI)
+- [x] Database migration (SQLite)
 - [ ] Email integration for auto-status updates
 - [ ] Browser extension for one-click capture
 - [ ] Resume/cover letter matching with LLM

@@ -6,6 +6,7 @@
 - [System Architecture](#system-architecture)
 - [Core Technologies](#core-technologies)
 - [Feature Specifications](#feature-specifications)
+- [Storage & Web UI Design](#storage--web-ui-design)
 - [Performance Optimizations](#performance-optimizations)
 - [Data Models](#data-models)
 - [API Integration](#api-integration)
@@ -18,7 +19,7 @@
 
 ## Executive Summary
 
-**IntelliApply** is a sophisticated job application tracking system that leverages large language models (LLMs) for intelligent information extraction. Built with Python, it combines advanced web scraping, natural language processing, and efficient data management to automate the tedious aspects of job application tracking.
+**IntelliApply** is a sophisticated job application tracking system that leverages large language models (LLMs) for intelligent information extraction. Built with Python, it combines advanced web scraping, natural language processing, and local SQLite-backed data management with a built-in web UI to automate the tedious aspects of job application tracking.
 
 ### Key Innovations
 
@@ -52,21 +53,19 @@
                 │    ├─ Pydantic Validation Models
                 │    └─ Multi-API Fallback System
                 │
-                ├─── Data Management Layer (OOP Refactored)
-                │    ├─ ExcelManager Class (Singleton Instance)
-                │    │   ├─ Intelligent Cache System
-                │    │   │   ├─ DataFrame Cache (_cached_df)
-                │    │   │   ├─ Workbook Cache (_cached_workbook)
-                │    │   │   └─ mtime-Based Invalidation
-                │    │   ├─ Decorator System
-                │    │   │   ├─ @sync (pre-execution cache sync)
-                │    │   │   └─ @save (post-execution persistence)
-                │    │   ├─ Conflict Detection
-                │    │   └─ Operations
-                │    │       ├─ Vectorized Search (pandas)
-                │    │       ├─ Status Management (color-coded)
-                │    │       ├─ Duplicate Detection
-                │    │       └─ Schema Validation
+                ├─── Data Management Layer
+                │    ├─ JobDatabase Class (SQLite, shared instance)
+                │    │   ├─ Short-lived connection per operation
+                │    │   ├─ Vectorized Search (pandas over SQLite rows)
+                │    │   ├─ Status Management
+                │    │   ├─ Duplicate Detection
+                │    │   ├─ Automatic Schema Upgrade (ALTER TABLE)
+                │    │   └─ Excel Import / Export (legacy format)
+                │
+                ├─── Web UI Layer (background thread)
+                │    ├─ ThreadingHTTPServer (127.0.0.1:8765)
+                │    ├─ JSON API over the same JobDatabase instance
+                │    └─ Single-page UI (vanilla JS)
                 │
                 ├─── Session Management Layer
                 │    ├─ Cookie Persistence (pickle)
@@ -90,14 +89,19 @@ intelliapply/
 │
 ├── config/
 │   ├── __init__.py
-│   ├── config.py          # Domain keywords, cookie paths, HTTP headers
+│   ├── config.py          # Domain keywords, cookie paths, HTTP headers, web UI host/port
 │   ├── credential.py      # Config manager & loader (loads from user directory)
 │   ├── credential-example.yaml  # Configuration template
 │   └── prompt.py          # LLM prompts & Pydantic models
 │
+├── web/
+│   ├── __init__.py
+│   ├── server.py          # Local web UI server & JSON API (stdlib http.server)
+│   └── index.html         # Single-page UI (vanilla JS)
+│
 └── utils/
     ├── __init__.py
-    ├── excel_utils.py     # Excel operations & search engine
+    ├── db_utils.py        # SQLite storage (JobDatabase), search engine, Excel import/export
     ├── web_utils.py       # Web scraping & LLM integration
     ├── string_utils.py    # Text processing & normalization
     ├── print_utils.py     # Terminal rendering & UI
@@ -120,7 +124,7 @@ IntelliApply uses a YAML-based configuration system with automatic setup:
    - Automatically copies template from `credential-example.yaml`
    - Opens config file in default system editor
    - Validates configuration before proceeding
-3. **Structure**: YAML format with `api` and `paths` sections
+3. **Structure**: YAML format with an `api_services` list (`api_key`, `base_url`, `model`, optional `reasoning_effort`) and a `paths` section (`database_file_path`, `backup_folder_path`, optional legacy `excel_file_path`)
 4. **Loading**: `credential.py` contains `ConfigManager` class that handles all config operations
 
 This approach ensures credentials are never committed to version control while providing a smooth setup experience.
@@ -135,7 +139,9 @@ This approach ensures credentials are never committed to version control while p
 |-------|-----------|---------|
 | **Language** | Python 3.8+ | Core implementation language |
 | **LLM API** | OpenAI-compatible API | Job information extraction |
-| **Data Storage** | Excel (openpyxl) | Structured data persistence |
+| **Data Storage** | SQLite (stdlib `sqlite3`) | Structured data persistence |
+| **Web UI** | stdlib `http.server` + vanilla JS | Local browser interface |
+| **Excel I/O** | openpyxl | Legacy import / export |
 | **Data Analysis** | pandas | Vectorized search operations |
 | **Validation** | Pydantic | Schema validation & type safety |
 | **Static Scraping** | requests + BeautifulSoup4 | HTML parsing for simple pages |
@@ -145,7 +151,8 @@ This approach ensures credentials are never committed to version control while p
 
 ### Dependency Rationale
 
-- **openpyxl**: Chosen for Excel compatibility with formatting support (cell colors for status)
+- **sqlite3**: Standard library, zero extra dependencies, single-file storage with transactions
+- **openpyxl**: Only used for Excel import/export (status is represented by cell fill color)
 - **pandas**: Enables vectorized operations for 3-5x performance improvement in search
 - **Playwright**: Handles JavaScript-rendered content that requests cannot fetch
 - **Pydantic**: Ensures type safety and structured LLM output with automatic validation
@@ -168,7 +175,7 @@ Pipeline:
   6. Send to LLM for structured extraction
   7. Validate with Pydantic models
   8. Check for duplicates
-  9. Store in Excel with metadata
+  9. Store in the SQLite database with metadata
   10. Backup HTML to local storage (async)
 ```
 
@@ -190,7 +197,7 @@ Pipeline:
   2. Parse headers and data rows
   3. Map columns to internal schema
   4. Validate required fields
-  5. Store directly in Excel (no LLM needed)
+  5. Store directly in the database (no LLM needed)
 ```
 
 #### JSON Input Processing
@@ -201,7 +208,7 @@ Pipeline:
   2. Parse with safe JSON parser
   3. Normalize field names (Job_Title → Job Title)
   4. Validate against Pydantic schema
-  5. Store in Excel
+  5. Store in the database
 ```
 
 #### Raw Content Processing
@@ -277,7 +284,7 @@ Schema:
 
 #### Implementation Details
 
-**Vectorized Search Algorithm** (utils/excel_utils.py:154-264):
+**Vectorized Search Algorithm** (`utils/db_utils.py::JobDatabase.search_applications`, operating on a DataFrame loaded from SQLite for each search):
 
 ```python
 # 1. Pre-compute normalized columns
@@ -350,14 +357,14 @@ DOMAIN_KEYWORDS = {
 #### Algorithm
 
 ```python
-def check_duplicate_entry(excel_file, new_data):
+def check_duplicate_entry(self, new_data):
     """
     Checks if entry with same Company + Job Title exists.
-    Returns matching row or None.
+    Returns matching record or None.
     """
-    for _, row in df.iterrows():
-        if (row['Company'].strip() == new_data['Company'].strip() and
-            row['Job Title'].strip() == new_data['Job Title'].strip()):
+    for row in self.get_all_jobs():
+        if all(row[f].strip() == str(new_data[f]).strip()
+               for f in ['Company', 'Job Title'] if f in new_data):
             return row
     return None
 ```
@@ -369,225 +376,55 @@ def check_duplicate_entry(excel_file, new_data):
 
 ---
 
-## ExcelManager: Object-Oriented Refactoring
+## Storage & Web UI Design
 
 ### Motivation
 
-The original implementation used module-level functions that repeatedly read Excel files from disk to ensure data freshness. This approach had several drawbacks:
+Earlier versions stored data in an Excel file and needed an elaborate dual cache (DataFrame + workbook), mtime-based invalidation, sync/save decorators and write-conflict detection to stay fast and safe when the file was edited externally. Moving to SQLite removes all of that machinery: transactions give consistency, there is no external file editing to detect, and a browser UI replaces "open the spreadsheet and edit".
 
-1. **Performance**: Every search operation triggered disk I/O, causing noticeable lag
-2. **Data Consistency**: No mechanism to detect external file modifications
-3. **Maintenance**: Global state and scattered function dependencies made code hard to manage
+### JobDatabase
 
-### Solution: ExcelManager Class
+`utils/db_utils.py::JobDatabase` is the sole data access point. One instance is created at startup and shared by the CLI thread and the web server thread.
 
-A comprehensive object-oriented refactoring that introduced intelligent caching with conflict detection.
+- **Schema**: table `jobs` with `id INTEGER PRIMARY KEY AUTOINCREMENT` plus TEXT columns named exactly like the former Excel headers: `Status` and all fields from `ALL_FIELDS`. `Status` holds `''`, `REJECTED`, `PROCESSING` or `OFFER`.
+- **Connections**: every operation opens a short-lived connection inside a transaction and closes it afterwards, so the two threads never share a connection object.
+- **Schema upgrade**: on startup, columns missing from the table are added with `ALTER TABLE ... ADD COLUMN`.
+- **Search**: the algorithm is unchanged (vectorized pandas masks); the DataFrame is now loaded from SQLite on each search instead of being cached.
+- **Status & safety**: marking a status also stamps the matching date column (`Processed Date` or `Result Date`). Before marking or deleting, the database is copied to the system temp directory using SQLite's backup API.
+- **Other operations**: duplicate check (Company + Job Title), summary statistics, show/delete last record, update/delete by id.
 
-#### Core Design Principles
+### Excel Compatibility
 
-1. **Encapsulation**: Cache state (DataFrame, workbook, mtime) and operations bundled in a single class
-2. **Single Instance**: One ExcelManager instance per session serves as the sole data access point
-3. **Lazy Loading**: Disk reads only occur when necessary (first load, external modification, explicit invalidation)
-4. **Conflict Detection**: mtime comparison prevents accidental overwrites of external changes
-5. **Explicit Invalidation**: Users can manually clear cache when needed (e.g., after opening Excel)
+- **Path resolution** (`config/credential.py`): `paths.database_file_path` is used if set; for legacy configs with only `paths.excel_file_path`, the database path is the same path with `.xlsx` replaced by `.db`.
+- **Import**: if the database file does not exist on startup and a legacy Excel file exists, it is imported once (`import_excel`); the status is derived from the Status cell fill color and empty rows are skipped. If the import fails, the new empty database is removed so the import is retried next time.
+- **Export** (`export_excel`): writes the legacy format - header row `Status` + fields, Status cell without value but filled red/yellow/green. Used by the CLI `export` command (timestamped file next to the database) and the web `/api/export` endpoint.
 
-#### Cache Architecture
+### Web UI
 
-```python
-class ExcelManager:
-    def __init__(self, file_path):
-        self.file_path = file_path
-        self._cached_df = None           # pandas DataFrame with _internal_status column
-        self._cached_workbook = None     # openpyxl Workbook object (kept open)
-        self._last_mtime = 0.0          # File modification timestamp
-```
+`web/server.py` runs a `ThreadingHTTPServer` bound to `127.0.0.1:8765` (`WEB_HOST`/`WEB_PORT` in `config/config.py`). It is started in a daemon thread when the CLI starts, or standalone via `python -m intelliapply.web.server`. If the port is taken, a warning is printed and the CLI continues without it. The CLI `open` command opens the UI in the default browser.
 
-**Dual Cache Strategy**:
-- **DataFrame**: Fast reads for search/analysis operations
-- **Workbook**: Fast writes for status updates (no need to reload entire file)
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/` | Single-page UI (`web/index.html`, vanilla JS) |
+| GET | `/api/jobs[?q=]` | All records, or smart-search results when `q` is given |
+| POST | `/api/jobs` | Add a record (required-field check, 409 on duplicate unless `force`) |
+| PATCH | `/api/jobs/<id>` | Update fields of a record |
+| DELETE | `/api/jobs/<id>` | Delete a record (with database backup) |
+| POST | `/api/jobs/<id>/mark` | Set status and stamp its date column |
+| GET | `/api/summary` | Statistics (same numbers as CLI `summary`) |
+| GET | `/api/export` | Download Excel export |
 
-**Internal Status Column**: 
-- Cell colors (Red/Yellow/Green) converted to `_internal_status` values ('REJECTED'/'PROCESSING'/'OFFER')
-- Stored in DataFrame for fast access without openpyxl calls
-- Synchronized with workbook colors on every write
+**UI behavior**: smart search (same algorithm as the CLI) or plain "Contains" search over all fields; status filter; click column headers to sort; double-click a cell to edit (Enter saves, Shift+Enter newline, Esc cancels, blur saves); status dropdown (setting a status stamps the date column like the CLI, clearing it does not); per-row delete with confirmation; add form with duplicate warning; summary line.
 
-#### Synchronization System
-
-**Decorator-Driven Workflow**:
-
-```python
-def sync(func):
-    """Auto-call _sync_data() before function execution."""
-    @functools.wraps(func)
-    def wrapper(self, *args, **kwargs):
-        self._sync_data()  # Check mtime, reload if needed
-        return func(self, *args, **kwargs)
-    return wrapper
-
-def save(func):
-    """Auto-call _save_data() after function execution."""
-    @functools.wraps(func)
-    def wrapper(self, *args, **kwargs):
-        result = func(self, *args, **kwargs)
-        self._save_data()  # Save workbook, update mtime
-        return result
-    return wrapper
-```
-
-**Usage Patterns**:
-- Read operations: `@sync` decorator ensures cache is current
-- Write operations (modify existing): `@sync` + `@save` decorators
-- Write operations (change structure): `@save` decorator, then manual invalidation if needed
-
-#### Core Methods
-
-**1. `_sync_data()` - Cache Synchronization**
-
-```python
-def _sync_data(self):
-    """
-    Synchronize cache with Excel file if needed.
-    No return value - updates internal state only.
-    """
-    current_mtime = os.path.getmtime(self.file_path)
-    
-    # Check if cache is valid (2-second tolerance for filesystem precision)
-    if self._cached_df is not None and abs(current_mtime - self._last_mtime) < 2:
-        return  # Cache is fresh
-    
-    # Cache invalid - reload from disk
-    # 1. Load DataFrame with pandas
-    # 2. Load workbook with openpyxl (keep open)
-    # 3. Read Status column colors for all rows
-    # 4. Convert colors to internal status identifiers
-    # 5. Add _internal_status column to DataFrame
-    # 6. Update cache and mtime
-```
-
-**2. `_save_data()` - Persistence**
-
-```python
-def _save_data(self):
-    """Save cached workbook to disk and update mtime."""
-    if self._cached_workbook is not None:
-        self._cached_workbook.save(self.file_path)
-        self._last_mtime = os.path.getmtime(self.file_path)
-```
-
-**3. `_check_for_write_conflict()` - Safety Check**
-
-```python
-def _check_for_write_conflict(self):
-    """
-    Check if file modified externally since last read.
-    Prompts user for confirmation if conflict detected.
-    """
-    current_mtime = os.path.getmtime(self.file_path)
-    
-    if abs(current_mtime - self._last_mtime) > 2:
-        # File changed externally!
-        print_warning_with_timestamps()
-        confirm = input("Continue with write? (y/yes): ")
-        return confirm.lower() in ['y', 'yes']
-    
-    return True  # Safe to write
-```
-
-**4. Example Method - `_mark_status()`**
-
-```python
-@sync  # Ensure cache is current before execution
-@save  # Automatically save after execution
-def _mark_status(self, row_index, status_color, date_column, status_name):
-    """Mark status with color and update date column."""
-    if not self._check_for_write_conflict():
-        return False
-    
-    # Update workbook cell color
-    cell = self._cached_workbook.cell(row_index, status_col_idx)
-    cell.fill = PatternFill(start_color=status_color, fill_type="solid")
-    
-    # Update date column in workbook
-    date_cell.value = datetime.now().strftime('%Y-%m-%d')
-    
-    # Synchronize DataFrame cache
-    df_index = row_index - 2
-    self._cached_df.at[df_index, '_internal_status'] = self._color_to_status(status_color)
-    self._cached_df.at[df_index, date_column] = date_cell.value
-    
-    # @save decorator will automatically call _save_data()
-    return True
-```
-
-#### Key Design Decisions
-
-**Q: Why 2-second mtime tolerance?**  
-A: Different filesystems record modification times with varying precision. 2-second tolerance prevents false cache invalidations due to minor timestamp differences.
-
-**Q: Why keep workbook open?**  
-A: Opening/closing workbook for every status update is expensive. Keeping it open in memory allows fast consecutive writes.
-
-**Q: Why not invalidate cache after every write?**  
-A: For operations that modify existing cells (like status updates), we synchronously update both workbook and DataFrame cache. The cache remains valid. Only structural changes (add/delete rows) benefit from invalidation, but mtime detection handles this automatically.
-
-#### Performance Impact
-
-**Before Refactoring** (module-level functions):
-- Search operation: ~50-100ms (includes disk read)
-- Consecutive searches: Same latency every time
-- Status update: ~200-300ms (load + modify + save)
-
-**After Refactoring** (ExcelManager class):
-- First search: ~50-100ms (cache miss, load from disk)
-- Consecutive searches: ~5-10ms (cache hit, memory read)
-- Status update: ~50-100ms (modify cached workbook + save)
-- **10-20x speedup** for typical workflows with multiple searches
-
-#### Migration from Module Functions
-
-**Before**:
-```python
-# main.py
-from utils.excel_utils import search_applications, mark_as_rejected
-
-results = search_applications(search_term="Amazon")
-mark_as_rejected(row_index=5)
-```
-
-**After**:
-```python
-# main.py
-from utils.excel_utils import ExcelManager
-
-excel_manager = ExcelManager(EXCEL_FILE_PATH)
-results = excel_manager.search_applications(search_term="Amazon")
-excel_manager.mark_as_rejected(row_index=5)
-```
-
-**Backward Compatibility**: Module-level functions remain available for legacy code, but are marked for deprecation.
+**Security**: the server only binds to localhost, and every non-GET request must be `application/json`. Browsers therefore send a CORS preflight for cross-site requests, which the server does not allow, so other websites cannot modify data.
 
 ---
 
 ## Performance Optimizations
 
-### 1. ExcelManager Caching System (Implemented 2025-01)
+### 1. Storage Simplification (SQLite, replaces Excel caching)
 
-**Problem**: Every Excel operation (search, read, update) triggered disk I/O, causing cumulative latency in typical workflows.
-
-**Solution**: Object-oriented refactoring with intelligent dual-cache system (DataFrame + workbook) and mtime-based invalidation.
-
-**Impact**:
-- **10-20x speedup** for consecutive searches (from ~50-100ms to ~5-10ms)
-- **2-3x speedup** for status updates (cached workbook eliminates reload overhead)
-- Near-instant response for typical multi-search workflows
-- Zero performance penalty for single-operation use cases
-
-**Implementation Details**:
-- Lazy loading with 2-second mtime tolerance
-- Decorator-driven synchronization (`@sync`, `@save`)
-- Conflict detection prevents data loss
-
-**Code Location**: `utils/excel_utils.py::ExcelManager` class
+The former `ExcelManager` dual cache (DataFrame + workbook with mtime invalidation) was removed together with Excel storage. SQLite reads of a personal-scale dataset are fast enough to load per search, and there is no cached state that can become stale. See [Storage & Web UI Design](#storage--web-ui-design).
 
 ### 2. Keyword Matching Optimization (Implemented 2024-12)
 
@@ -600,7 +437,7 @@ excel_manager.mark_as_rejected(row_index=5)
 - Better scaling with dataset growth
 - Single-pass processing
 
-**Code Location**: `utils/excel_utils.py::ExcelManager.search_applications()`
+**Code Location**: `utils/db_utils.py::JobDatabase.search_applications()`
 
 ### 3. Terminal Display Optimization (Implemented 2025-01)
 
@@ -636,16 +473,15 @@ print('\n'.join(lines))
 
 ### 4. LLM API Fallback System
 
-**Strategy**: Multiple API keys with model-level fallback
+**Strategy**: Multiple API services (key + endpoint + model) with ordered fallback
 
 ```python
-for model in MODEL_LIST:           # Try each model
-    for api_key in API_KEY_LIST:   # Try each API key
-        try:
-            response = client.beta.chat.completions.parse(...)
-            return response.parsed
-        except Exception:
-            continue  # Next API key or model
+for service in API_SERVICES:       # Try each configured service in order
+    try:
+        response = client.chat.completions.create(...)
+        return parse(response)
+    except Exception:
+        continue  # Next service
 ```
 
 **Benefits**:
@@ -664,13 +500,13 @@ class JobInfo(BaseModel):
     isValid: bool           # Validation flag
     Company: str            # Required
     Location: str           # Required
-    Job_Title: str          # Required (mapped to "Job Title" in Excel)
+    Job_Title: str          # Required (mapped to "Job Title" column)
     Code: str = ""          # Optional: Job ID
     Type: str = ""          # Optional: Onsite/Hybrid/Remote
     Link: str = ""          # Optional: URL (cleaned of params)
 ```
 
-### Excel Schema
+### Database Schema
 
 ```python
 ALL_FIELDS = [
@@ -685,23 +521,15 @@ ALL_FIELDS = [
     'Link'           # Optional
 ]
 
-# Hidden column for visual status representation
-'Status'  # Cell fill color: Red/Yellow/Green
+# Table `jobs`: id INTEGER PRIMARY KEY AUTOINCREMENT,
+# "Status" + ALL_FIELDS as TEXT NOT NULL DEFAULT ''
+# Status values: '', 'REJECTED', 'PROCESSING', 'OFFER'
 ```
 
 ### Schema Migration
 
-```python
-def validate_excel_file():
-    """
-    1. Check if file exists → prompt to create
-    2. Check if all required columns exist
-    3. If missing columns:
-       - Backup existing file with timestamp
-       - Create new file with correct schema
-       - Prompt user to manually migrate data
-    """
-```
+- **New columns**: `JobDatabase._init_schema()` compares `PRAGMA table_info(jobs)` with the expected fields and runs `ALTER TABLE ... ADD COLUMN` for any that are missing.
+- **Excel to SQLite**: one-time import on first run when the database file does not exist yet (see [Excel Compatibility](#excel-compatibility)).
 
 ---
 
@@ -745,11 +573,15 @@ def validate_excel_file():
 ### API Configuration
 
 ```python
-# credentials.py
-API_KEY_LIST = ["key1", "key2", "key3"]  # Multiple keys for fallback
-BASE_URL = "https://api.provider.com/v1"  # OpenAI-compatible endpoint
-MODEL_LIST = ["model-1", "model-2"]       # Priority order
-REASONING_EFFORT = "medium"               # For reasoning models
+# ~/intelliApply_config/config.yaml
+api_services:                             # Tried in order (fallback)
+  - api_key: "key1"
+    base_url: "https://api.provider.com/v1"  # OpenAI-compatible endpoint
+    model: "model-1"
+    reasoning_effort: "medium"            # Optional, for reasoning models
+  - api_key: "key2"
+    base_url: "https://api.other.com/v1"
+    model: "model-2"
 ```
 
 ---
@@ -944,7 +776,7 @@ def remove_script_content(html_content: str) -> str:
 DEFAULT_PROMPT = """
 Search: Enter keywords or initials
 Add new record: Enter one-line JSON data / URL / webpage content (wrapped with '< >' or '```')
-Other commands: delete last record, update cookie, view statistics summary, open Excel file, exit tool
+Other commands: delete last record, update cookie, view statistics summary, open web UI, export Excel file, exit tool
 """
 
 UPDATE_PROMPT = """
@@ -1023,15 +855,13 @@ job_width = max(len(format_string(r['Job Title'], limit=65)) for r in results)
 
 ```yaml
 # ~/intelliApply_config/config.yaml (auto-created from template)
-api:
-  api_key_list:
-    - "your-api-key-here"
-  base_url: "https://..."
-  model_list:
-    - "gemini-2.0-flash-exp"
+api_services:
+  - api_key: "your-api-key-here"
+    base_url: "https://..."
+    model: "gemini-2.5-flash"
 
 paths:
-  excel_file_path: "/path/to/excel"
+  database_file_path: "/path/to/job_applications.db"
   backup_folder_path: "/path/to/backups"
 ```
 
@@ -1063,7 +893,8 @@ paths:
 **Mitigations**:
 - Users can self-host OpenAI-compatible models
 - BASE_URL configurable for private endpoints
-- No user data stored by IntelliApply beyond local Excel
+- No user data stored by IntelliApply beyond the local SQLite database
+- The web UI binds to `127.0.0.1` only and requires `application/json` for all write requests (forces a CORS preflight, blocking cross-site modification)
 
 ---
 
@@ -1093,13 +924,8 @@ def summary():
 
 ### Test Files
 
-```python
-# test.py
-# Tests Excel color formatting for status cells
-
-# applied_job_checker.py
-# Tests duplicate detection functionality
-```
+There is no automated test suite. `applied_job_checker.py` is only a compatibility alias that runs `intelliapply.main:main`.
+The 2026-09-30 refactor was verified manually; see [refactor_20260930.md](refactor_20260930.md) for the procedure and results.
 
 ### Manual Testing Checklist
 
@@ -1117,17 +943,24 @@ def summary():
    - [ ] Job title word-level matching
 
 3. **Status Management**
-   - [ ] Mark as rejected (red, Result Date)
-   - [ ] Mark as processing (yellow, Processed Date)
-   - [ ] Mark as offer (green, Result Date)
+   - [ ] Mark as rejected (Result Date)
+   - [ ] Mark as processing (Processed Date)
+   - [ ] Mark as offer (Result Date)
 
-4. **Session Management**
+4. **Web UI & Export**
+   - [ ] Smart / Contains search, status filter, column sort
+   - [ ] Double-click edit (Enter / Shift+Enter / Esc / blur)
+   - [ ] Status dropdown stamps date column; clearing keeps dates
+   - [ ] Add record (required fields, duplicate confirm), delete with confirm
+   - [ ] Export Excel (web download and CLI `export`) keeps legacy format
+
+5. **Session Management**
    - [ ] Cookie save/load
    - [ ] Cookie validation
    - [ ] Browser-based cookie update
 
-5. **Error Handling**
-   - [ ] Invalid Excel schema migration
+6. **Error Handling**
+   - [ ] Legacy Excel import / missing column upgrade
    - [ ] Duplicate entry confirmation
    - [ ] LLM API failures
    - [ ] Network errors
@@ -1138,25 +971,11 @@ def summary():
 
 ### Planned Features
 
-#### 1. Database Migration
-**Goal**: Replace Excel with SQLite or PostgreSQL
-**Benefits**:
-- Better concurrent access
-- ACID transactions
-- Advanced querying
-- Scalability
+#### 1. Database Migration (Implemented)
+Excel storage was replaced by SQLite (`JobDatabase`), with automatic import of legacy Excel files and Excel export.
 
-**Challenges**:
-- Lose Excel's visual formatting (colors)
-- Need to build UI for status visualization
-
-#### 2. Web Interface
-**Goal**: React/Vue frontend with REST API backend
-**Features**:
-- Dashboard with statistics charts
-- Calendar view of application timeline
-- Export to PDF/CSV
-- Multi-user support
+#### 2. Web Interface (Implemented, basic)
+A local single-page web UI (search, sort, inline edit, status, add/delete, summary, Excel export) is served by the CLI. Still open: charts/dashboard, calendar view, PDF/CSV export, multi-user support.
 
 #### 3. Email Integration
 **Goal**: Automatic status updates from email monitoring
@@ -1208,7 +1027,7 @@ fb543fa - Update confirmation prompts and adjust color usage
 b3a6188 - Improve user input handling for marking commands
 c064c02 - Add multi-status tracking with date columns
 7f92f0d - Add terminal width adjustment functions
-879618a - Refactor Excel validation and search logic
+879618a - Refactor Excel validation and search logic (later replaced by SQLite storage)
 83de6e0 - Enhance job title and company matching
 c1e39e6 - Implement local backup functionality
 a24de30 - Add JSON input handling and validation
@@ -1216,11 +1035,6 @@ a24de30 - Add JSON input handling and validation
 ```
 
 ### Performance Benchmarks
-
-**ExcelManager Caching** (consecutive searches):
-- Before refactoring: ~50-100ms per search (with disk I/O)
-- After refactoring: ~5-10ms per search (memory cache)
-- Speedup: **10-20x**
 
 **Search Performance** (100 entries, vectorized):
 - Before optimization: ~150ms
@@ -1231,11 +1045,6 @@ a24de30 - Add JSON input handling and validation
 - Before optimization: 10 print() calls, ~50ms
 - After optimization: 1 print() call, ~5ms
 - Speedup: **10x**
-
-**Status Update** (with cached workbook):
-- Before refactoring: ~200-300ms (load + modify + save)
-- After refactoring: ~50-100ms (modify cached + save)
-- Speedup: **2-3x**
 
 ---
 

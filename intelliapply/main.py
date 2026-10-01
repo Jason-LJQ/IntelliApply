@@ -1,7 +1,7 @@
 ############################################
 # Author: Jason Liao
 # Date: 2024-12-22
-# Description: A simple script to search for job applications in an Excel file
+# Description: A simple script to search for job applications
 ############################################
 
 import os
@@ -10,9 +10,10 @@ import signal
 import sys
 
 from intelliapply.utils.string_utils import is_markdown_table, parse_markdown_table, is_json
-from intelliapply.utils.excel_utils import ExcelManager
+from intelliapply.utils.db_utils import JobDatabase
 from intelliapply.utils.print_utils import print_, print_results, COLOR
 from intelliapply.utils.web_utils import save_cookie, validate_cookie, handle_webpage_content, start_browser, add_cookie, handle_json_content, get_backup_directory
+from intelliapply.web.server import start_web_server, open_web_ui
 
 exit_flag = False
 
@@ -62,7 +63,7 @@ def detect_ending(min_threshold=0.05, max_threshold=0.5):
 
 DEFAULT_PROMPT = f"""Search: Enter keywords or initials
 Add new record: Enter one-line JSON data / URL / webpage content (wrapped with '< >' or '```')
-Other commands: {COLOR['BOLD_ITALIC']}delete{COLOR['RESET']} last record, update {COLOR['BOLD_ITALIC']}cookie{COLOR['RESET']}, view statistics {COLOR['BOLD_ITALIC']}summary{COLOR['RESET']}, {COLOR['BOLD_ITALIC']}open{COLOR['RESET']} Excel file, {COLOR['BOLD_ITALIC']}exit{COLOR['RESET']} tool"""
+Other commands: {COLOR['BOLD_ITALIC']}delete{COLOR['RESET']} last record, update {COLOR['BOLD_ITALIC']}cookie{COLOR['RESET']}, view statistics {COLOR['BOLD_ITALIC']}summary{COLOR['RESET']}, {COLOR['BOLD_ITALIC']}open{COLOR['RESET']} web UI, {COLOR['BOLD_ITALIC']}export{COLOR['RESET']} Excel file, {COLOR['BOLD_ITALIC']}exit{COLOR['RESET']} tool"""
 
 UPDATE_PROMPT = f"""Update status: Enter number+action (e.g. 1r=line 1 as reject, 2p=line 2 as processing, 3o=line 3 as offer)"""
 
@@ -74,8 +75,9 @@ def main():
     # Clear the console
     os.system('cls' if os.name == 'nt' else 'clear')
 
-    # Initialize ExcelManager instance
-    excel_manager = ExcelManager()
+    # Initialize JobDatabase instance and serve the web UI in background
+    job_db = JobDatabase()
+    start_web_server(job_db)
 
     # Validate job snapshot folder
     if not get_backup_directory():
@@ -134,7 +136,7 @@ def main():
                 print("|" + "-" * 99)
                 print_("Webpage content detected. Processing ...")
                 content = '\n'.join(user_input_lines)
-                handle_webpage_content(content, excel_manager)
+                handle_webpage_content(content, job_db)
                 last_results = None
                 continue
 
@@ -147,7 +149,7 @@ def main():
                 break
 
             if user_input.strip().lower() == 'summary':
-                excel_manager.summary()
+                job_db.summary()
                 last_results = None
                 continue
 
@@ -157,21 +159,26 @@ def main():
                 continue
 
             if user_input.strip().lower() == 'open':
-                excel_manager.open_excel_file()
-                excel_manager.invalidate_cache()
+                open_web_ui()
+                last_results = None
+                continue
+
+            if user_input.strip().lower() == 'export':
+                export_path = job_db.export_excel()
+                print_(f"Exported to Excel file {export_path}", "GREEN")
                 last_results = None
                 continue
 
             if user_input.strip().lower() == 'delete':
                 try:
-                    excel_manager.show_last_row(delete=True)
+                    job_db.show_last_row(delete=True)
                 except KeyboardInterrupt:
                     print_('\nDeletion cancelled. Send SIGINT again to exit.')
                 last_results = None
                 continue
 
             if user_input.strip().lower() == 'last':
-                excel_manager.show_last_row(delete=False)
+                job_db.show_last_row(delete=False)
                 last_results = None
                 continue
 
@@ -225,15 +232,15 @@ def main():
                 if action == 'r':
                     action_text = "REJECTED"
                     action_color = "RED"
-                    mark_func = excel_manager.mark_as_rejected
+                    mark_func = job_db.mark_as_rejected
                 elif action == 'p':
                     action_text = "PROCESSING"
                     action_color = "YELLOW"
-                    mark_func = excel_manager.mark_as_processing
+                    mark_func = job_db.mark_as_processing
                 elif action == 'o':
                     action_text = "OFFER"
                     action_color = "GREEN"
-                    mark_func = excel_manager.mark_as_offer
+                    mark_func = job_db.mark_as_offer
 
                 # Show confirmation prompt with color formatting
                 action_text_colored = f"{COLOR[action_color]}{action_text}{COLOR['BLUE']}"
@@ -242,8 +249,7 @@ def main():
                 confirm = input(print_("Confirm? (y/N): ", color="BLUE", return_text=True)).strip().lower()
 
                 if confirm == 'y':
-                    row_index = row_data['row_index']
-                    mark_func(row_index=row_index)
+                    mark_func(row_data['id'])
                     last_results = None
                     continue
                 else:
@@ -258,20 +264,20 @@ def main():
                     print_("Invalid Markdown table format.", "RED")
                     continue
 
-                # Append the data to the Excel file
-                excel_manager.append_data_to_excel(data=data)
-                print_(f"New record successfully appended to Excel file.", "GREEN")
+                # Append the data to the database
+                job_db.append_data(data=data)
+                print_(f"New record successfully appended to database.", "GREEN")
                 last_results = None
 
             elif is_json(user_input):
                 # Handle JSON input
                 print_("JSON content detected. Processing ...")
-                handle_json_content(user_input, excel_manager)
+                handle_json_content(user_input, job_db)
                 last_results = None
                 continue
 
             else:
-                results = excel_manager.search_applications(search_term=user_input)
+                results = job_db.search_applications(search_term=user_input)
                 if results:
                     last_results = results
                     print_results(results, mark_mode=True)
